@@ -1,4 +1,4 @@
-procgen-ppo:
+run_001:
     env: procgen_env_wrapper  # Change this at your own risk :D
     run: PPO
     # Can be replaced by any of the available agents as described at : 
@@ -21,6 +21,9 @@ procgen-ppo:
     ################################################
     # === Settings for Checkpoints ===
     ################################################
+    ### ADDED
+    # local_dir: /home/wulfebw/experiments/procgen_004
+    ### END ADDED
     checkpoint_freq: 100
     checkpoint_at_end: True
     keep_checkpoints_num: 5
@@ -54,6 +57,10 @@ procgen-ppo:
         # === Environment Settings ===
         ################################################
         ################################################
+        # ADDED
+        # This monitoring keyword doesn't seem to do anything
+        # monitor: True
+        # END ADDED
         # Discount factor of the MDP.
         gamma: 0.999
         # The GAE(lambda) parameter.
@@ -85,7 +92,9 @@ procgen-ppo:
         # scale of the rewards. If your expected V is large, increase this.
         vf_clip_param: 0.2
         # If specified, clip the global norm of gradients by this amount.
-        grad_clip: 0.5
+        # there's some bug related to gradient clipping, so if this is set it causes an error
+        # it might have to do with my install of everything
+        # grad_clip: 0.5
         # Which observation filter to apply to the observation.
         observation_filter: NoFilter
         # Share layers for value function. If you set this to True, it's important
@@ -125,7 +134,7 @@ procgen-ppo:
         # Use PyTorch (instead of tf). If using `rllib train`, this can also be
         # enabled with the `--torch` flag.
         # NOTE: Some agents may not support `torch` yet and throw an error.
-        use_pytorch: False
+        use_pytorch: True
 
         ################################################
         ################################################
@@ -187,7 +196,7 @@ procgen-ppo:
             # Examples of implementing the model in Keras is also available
             # here :
             # https://github.com/ray-project/ray/blob/master/rllib/examples/custom_keras_model.py
-            custom_model: impala_cnn_tf
+            custom_model: impala_cnn_torch
             # Extra options to pass to custom class
             custom_options: {}
 
@@ -198,12 +207,12 @@ procgen-ppo:
         ################################################
         # Number of rollout worker actors to create for parallel sampling. Setting
         # this to 0 will force rollouts to be done in the trainer actor.
-        num_workers: 6
+        num_workers: 4 # 6
 
         # Number of environments to evaluate vectorwise per worker. This enables
         # model inference batching, which can improve performance for inference
         # bottlenecked workloads.
-        num_envs_per_worker: 12
+        num_envs_per_worker: 16 # 12
 
         # Divide episodes into fragments of this many steps each during rollouts.
         # Sample batches of this size are collected from rollout workers and
@@ -252,7 +261,7 @@ procgen-ppo:
         # algorithms can take advantage of trainer GPUs. This can be fractional
         # (e.g., 0.3 GPUs).
         # Note : If GPUs are not available, this will be overriden by the AIcrowd evaluators to 0.
-        num_gpus: 0.3
+        num_gpus: 0.5
 
         ################################################
         ################################################
@@ -291,4 +300,3 @@ procgen-ppo:
         # each worker, so that identically configured trials will have identical
         # results. This makes experiments reproducible.
         seed: null
-        
