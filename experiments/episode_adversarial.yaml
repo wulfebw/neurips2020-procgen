@@ -1,4 +1,4 @@
-run_005_ep_adv_coinrun_weight_1_l2_0.0001_paint_vel:
+run_007_ep_adv_coinrun_weight_0_l2_0_paint_vel:
     env: procgen_env_wrapper  # Change this at your own risk :D
     run: custom/EpisodeAdversarialTrainer
     # Can be replaced by any of the available agents as described at : 
@@ -198,7 +198,7 @@ run_005_ep_adv_coinrun_weight_1_l2_0.0001_paint_vel:
             # https://github.com/ray-project/ray/blob/master/rllib/examples/custom_keras_model.py
             custom_model: episode_adversarial
             # Extra options to pass to custom class
-            custom_options: {"discriminator_weight": 1, "l2_weight": 0.0001}
+            custom_options: {"discriminator_weight": 0, "l2_weight": 0.0}
 
         ################################################
         ################################################
