@@ -5,8 +5,6 @@ from ray.rllib.models import ModelCatalog
 from ray.rllib.utils.annotations import override
 from ray.rllib.utils import try_import_torch
 
-import sklearn.metrics
-
 torch, nn = try_import_torch()
 
 
@@ -189,7 +187,12 @@ class EpisodeAdversarialModel(TorchModelV2, nn.Module):
         probs = torch.sigmoid(logits).detach().cpu().numpy()
         targets = targets.detach().cpu().numpy()
         self.accuracy = ((probs > 0.5) == targets.astype(bool)).sum() / batch_size
-        self.avg_prc = sklearn.metrics.average_precision_score(targets, probs)
+
+        try:
+            import sklearn.metrics
+            self.avg_prc = sklearn.metrics.average_precision_score(targets, probs)
+        except:
+            self.avg_prc = 0
 
         self.l2_loss = self.l2_loss_fn() * self.l2_weight
 
