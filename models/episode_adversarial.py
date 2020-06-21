@@ -103,7 +103,8 @@ class ReverseLayerF(torch.autograd.Function):
 
 
 class EpisodeAdversarialModel(TorchModelV2, nn.Module):
-    def __init__(self, obs_space, action_space, num_outputs, model_config, name, discriminator_weight):
+    def __init__(self, obs_space, action_space, num_outputs, model_config, name,
+                 discriminator_weight, l2_weight):
         TorchModelV2.__init__(self, obs_space, action_space, num_outputs, model_config, name)
         nn.Module.__init__(self)
 
@@ -124,7 +125,7 @@ class EpisodeAdversarialModel(TorchModelV2, nn.Module):
         self.discriminator = EpisodeDiscriminator(input_size=256)
         self.discriminator_loss_fn = nn.BCEWithLogitsLoss(reduction="mean")
         self.discriminator_weight = discriminator_weight
-        print(discriminator_weight)
+        self.l2_weight = l2_weight
 
     @override(TorchModelV2)
     def forward(self, input_dict, state, seq_lens):
@@ -152,12 +153,20 @@ class EpisodeAdversarialModel(TorchModelV2, nn.Module):
     @override(TorchModelV2)
     def metrics(self):
         stats = dict()
+        stats["l2_loss"] = self.l2_loss
         stats["discriminator"] = {
             "loss": float(self.discriminator_loss.detach().cpu()),
             "accuracy": self.accuracy,
             "avg_prc": self.avg_prc
         }
         return stats
+
+    def l2_loss_fn(self):
+        value = 0
+        for name, param in self.named_parameters():
+            if name.endswith(".weight"):
+                value += torch.square(param).sum()
+        return value
 
     def custom_loss(self, policy_loss, episode_ids):
         batch_size = self.features.shape[0]
@@ -172,14 +181,19 @@ class EpisodeAdversarialModel(TorchModelV2, nn.Module):
         logits = self.discriminator(reverse_grad_features, reverse_grad_perm_features)
         targets = (episode_ids == episode_ids[perm]).view(-1, 1).to(torch.float32)
 
-        # Discriminator loss and metrics.
-        self.discriminator_loss = self.discriminator_loss_fn(logits, targets)
+        # Discriminator loss.
+        self.discriminator_loss = self.discriminator_loss_fn(logits,
+                                                             targets) * self.discriminator_weight
+
+        # Discriminator metrics.
         probs = torch.sigmoid(logits).detach().cpu().numpy()
         targets = targets.detach().cpu().numpy()
         self.accuracy = ((probs > 0.5) == targets.astype(bool)).sum() / batch_size
         self.avg_prc = sklearn.metrics.average_precision_score(targets, probs)
 
-        return policy_loss + self.discriminator_weight * self.discriminator_loss
+        self.l2_loss = self.l2_loss_fn() * self.l2_weight
+
+        return policy_loss + self.discriminator_loss + self.l2_loss
 
 
 ModelCatalog.register_custom_model("episode_adversarial", EpisodeAdversarialModel)
