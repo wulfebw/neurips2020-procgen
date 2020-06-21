@@ -22,9 +22,9 @@ run_007_ep_adv_coinrun_weight_0_l2_0_paint_vel:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/wulfebw/experiments/procgen_007
+    # local_dir: /home/wulfebw/experiments/procgen_007
     ### END ADDED
-    checkpoint_freq: 5
+    checkpoint_freq: 30
     checkpoint_at_end: True
     keep_checkpoints_num: 5
 
