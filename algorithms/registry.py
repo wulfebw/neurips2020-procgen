@@ -18,6 +18,18 @@ def _import_custom_random_agent():
     return CustomRandomAgent
 
 
+def _import_monet_agent():
+    from .monet_agent.monet_agent import MONetTrainer
+    return MONetTrainer
+
+
+def _import_episode_adversarial_agent():
+    from .episode_adversarial_agent.episode_adversarial_agent import EpisodeAdversarialTrainer
+    return EpisodeAdversarialTrainer
+
+
 CUSTOM_ALGORITHMS = {
-    "custom/CustomRandomAgent": _import_custom_random_agent
+    "custom/CustomRandomAgent": _import_custom_random_agent,
+    "custom/MONetTrainer": _import_monet_agent,
+    "custom/EpisodeAdversarialTrainer": _import_episode_adversarial_agent,
 }
