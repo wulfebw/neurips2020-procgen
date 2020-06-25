@@ -1,4 +1,4 @@
-run_007_ep_adv_coinrun_weight_0_l2_0_paint_vel:
+run_008_ep_adv_bigfish_weight_1_l2_0.0001_paint_vel:
     env: procgen_env_wrapper  # Change this at your own risk :D
     run: custom/EpisodeAdversarialTrainer
     # Can be replaced by any of the available agents as described at : 
@@ -22,7 +22,7 @@ run_007_ep_adv_coinrun_weight_0_l2_0_paint_vel:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    # local_dir: /home/wulfebw/experiments/procgen_007
+    local_dir: /home/wulfebw/experiments/procgen_010
     ### END ADDED
     checkpoint_freq: 30
     checkpoint_at_end: True
@@ -36,13 +36,13 @@ run_007_ep_adv_coinrun_weight_0_l2_0_paint_vel:
         ################################################
         env_config:
             # Name of the procgen environment to train on # Note, that this parameter will be overriden during the evaluation by the AIcrowd evaluators.
-            env_name: coinrun # dodgeball # heist # coinrun
+            env_name: bigfish # dodgeball # heist # coinrun
             # The number of unique levels that can be generated. Set to 0 to use unlimited levels
-            num_levels: 0
+            num_levels: 200
             # The lowest seed that will be used to generated levels. 'start_level' and 'num_levels' fully specify the set of possible levels
             start_level: 0
             # Paint player velocity info in the top left corner. Only supported by certain games.
-            paint_vel_info: True
+            paint_vel_info: False
             # Use randomly generated assets in place of human designed assets
             use_generated_assets: False
             # center_agent : Determines whether observations are centered on the agent or display the full level. Override at your own risk.
@@ -198,7 +198,7 @@ run_007_ep_adv_coinrun_weight_0_l2_0_paint_vel:
             # https://github.com/ray-project/ray/blob/master/rllib/examples/custom_keras_model.py
             custom_model: episode_adversarial
             # Extra options to pass to custom class
-            custom_options: {"discriminator_weight": 0, "l2_weight": 0.0}
+            custom_options: {"discriminator_weight": 1, "l2_weight": 0.0001}
 
         ################################################
         ################################################
@@ -300,3 +300,13 @@ run_007_ep_adv_coinrun_weight_0_l2_0_paint_vel:
         # each worker, so that identically configured trials will have identical
         # results. This makes experiments reproducible.
         seed: null
+
+        ################################################
+        ################################################
+        # === Evaluation Settings ===
+        ################################################
+        ################################################
+        evaluation_interval: 10
+        evaluation_num_episodes: 10
+        evaluation_num_workers: 0
+        evaluation_config: {"env_config": {"num_levels": 0}}
