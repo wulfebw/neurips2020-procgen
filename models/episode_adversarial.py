@@ -46,7 +46,8 @@ class ConvSequence(nn.Module):
         x = nn.functional.max_pool2d(x, kernel_size=3, stride=2, padding=1)
         x = self.res_block0(x)
         x = self.res_block1(x)
-        assert x.shape[1:] == self.get_output_shape()
+        assert x.shape[1:] == self.get_output_shape(
+        ), f"x.shape[1:] {x.shape[1:]} self.get_output_shape() {self.get_output_shape()}"
         return x
 
     def get_output_shape(self):
@@ -102,15 +103,27 @@ class ReverseLayerF(torch.autograd.Function):
 
 class EpisodeAdversarialModel(TorchModelV2, nn.Module):
     def __init__(self, obs_space, action_space, num_outputs, model_config, name,
-                 discriminator_weight, l2_weight):
+                 discriminator_weight, l2_weight, late_fusion):
         TorchModelV2.__init__(self, obs_space, action_space, num_outputs, model_config, name)
         nn.Module.__init__(self)
 
         h, w, c = obs_space.shape
         shape = (c, h, w)
 
+        if late_fusion:
+            self.obs_channels = 3
+            self.frame_diff_channels = c - self.obs_channels
+            self.initial_frame_diff = ConvSequence((self.frame_diff_channels, h, w), 8)
+            self.initial_obs = ConvSequence((self.obs_channels, h, w), 16)
+            shape = list(self.initial_obs.get_output_shape())
+            shape[0] = 8 + 16
+            shape = tuple(shape)
+            out_channels_list = [32, 32]
+        else:
+            out_channels_list = [16, 32, 32]
+
         conv_seqs = []
-        for out_channels in [16, 32, 32]:
+        for out_channels in out_channels_list:
             conv_seq = ConvSequence(shape, out_channels)
             shape = conv_seq.get_output_shape()
             conv_seqs.append(conv_seq)
@@ -125,11 +138,38 @@ class EpisodeAdversarialModel(TorchModelV2, nn.Module):
         self.discriminator_weight = discriminator_weight
         self.l2_weight = l2_weight
 
+        self.late_fusion = late_fusion
+        # self.t = 0
+
     @override(TorchModelV2)
     def forward(self, input_dict, state, seq_lens):
         x = input_dict["obs"].float()
         x = x / 255.0  # scale to 0-1
         x = x.permute(0, 3, 1, 2)  # NHWC => NCHW
+
+        if self.late_fusion:
+            x_frame_diff = self.initial_frame_diff(x[:, :self.frame_diff_channels, :, :])
+            x_obs = self.initial_obs(x[:, self.frame_diff_channels:, :, :])
+            x = torch.cat((x_frame_diff, x_obs), dim=1)
+
+            # frame_diff = x[0, :3, :, :].detach().cpu().numpy()
+            # obs_orig = x[0, 3:, :, :].detach().cpu().numpy()
+
+            # self.t += 1
+            # if (self.t + 1) % 1000 == 0:
+            #     import matplotlib.pyplot as plt
+            #     x_fd_d = x_frame_diff.detach().cpu().numpy()
+            #     fig, axs = plt.subplots(2, 5, figsize=(16, 8))
+            #     axs[0][0].imshow(obs_orig.transpose(1, 2, 0))
+            #     frame_diff = frame_diff.transpose(1, 2, 0)
+            #     frame_diff += 127 / 255
+            #     axs[0][1].imshow(frame_diff)
+            #     for i in range(x_fd_d.shape[1]):
+            #         row = (i + 2) // 5
+            #         col = (i + 2) % 5
+            #         axs[row][col].imshow(x_fd_d[0, i, :, :])
+            #     plt.show()
+
         for conv_seq in self.conv_seqs:
             x = conv_seq(x)
         x = torch.flatten(x, start_dim=1)

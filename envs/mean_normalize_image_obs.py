@@ -31,8 +31,13 @@ class MeanNormalizeImageObs(gym.ObservationWrapper):
         norm = obs - self.mean
         axs[0, 2].imshow(norm[:, :, :3])
         axs[0, 2].set_title("normalized diff")
-        axs[1, 2].hist(norm[:, :, :3].flatten())
+        norm_diff = norm[:, :, :3]
+        axs[1, 2].hist(norm_diff.flatten())
+        axs[1, 2].set_title(f"min: {norm_diff.min()} max: {norm_diff.max()} std: {norm_diff.std():.2f}")
+
         axs[0, 3].imshow(norm[:, :, 3:])
         axs[0, 3].set_title("normalized img")
-        axs[1, 3].hist(norm[:, :, 3:].flatten())
+        norm_img = norm[:, :, 3:]
+        axs[1, 3].hist(norm_img.flatten())
+        axs[1, 3].set_title(f"min: {norm_img.min()} max: {norm_img.max()} std: {norm_img.std():.2f}")
         plt.show()

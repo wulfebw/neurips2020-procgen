@@ -1,4 +1,4 @@
-run_001_bigfish_frame_diff_1_normalize_color:
+run_004_bigfish_frame_diff_1_normalize_color_late_fusion:
     env: custom_procgen_env_wrapper  # Change this at your own risk :D
     run: custom/EpisodeAdversarialTrainer
     # Can be replaced by any of the available agents as described at : 
@@ -22,7 +22,7 @@ run_001_bigfish_frame_diff_1_normalize_color:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/wulfebw/experiments/procgen_013
+    local_dir: /home/wulfebw/experiments/procgen_014
     ### END ADDED
     checkpoint_freq: 30
     checkpoint_at_end: True
@@ -209,7 +209,7 @@ run_001_bigfish_frame_diff_1_normalize_color:
             # https://github.com/ray-project/ray/blob/master/rllib/examples/custom_keras_model.py
             custom_model: episode_adversarial
             # Extra options to pass to custom class
-            custom_options: {"discriminator_weight": 0, "l2_weight": 0.0001}
+            custom_options: {"discriminator_weight": 0, "l2_weight": 0.0001, "late_fusion": True}
 
         ################################################
         ################################################

@@ -37,7 +37,7 @@ def write_experiments(base, num_iterations, env_names):
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
         for iteration in range(num_iterations):
-            for frame_diff in [True]:
+            for frame_diff in [True, False]:
                 # for ep_adv_weight in [0, 1]:
 
                 base_copy = copy.deepcopy(base)
@@ -48,7 +48,39 @@ def write_experiments(base, num_iterations, env_names):
                 #     "discriminator_weight"] = ep_adv_weight
                 # exp_name = f"itr_{iteration}_{env_name}_ep_adv_{ep_adv_weight}"
 
-                base_copy["config"]["env_config"]["frame_diff"] = frame_diff
+                if frame_diff:
+                    env_wrapper_options = {
+                        "frame_diff": True,
+                        "frame_diff_options": {
+                            "grayscale": False,
+                            "dt": 2
+                        },
+                        "normalize_obs": True
+                    }
+                    custom_model_options = {
+                        "discriminator_weight": 0,
+                        "l2_weight": 0.0001,
+                        "late_fusion": True
+                    }
+                else:
+                    env_wrapper_options = {
+                        "frame_diff": False,
+                        "frame_diff_options": {
+                            "grayscale": False,
+                            "dt": 2
+                        },
+                        "normalize_obs": False
+                    }
+                    custom_model_options = {
+                        "discriminator_weight": 0,
+                        "l2_weight": 0.0001,
+                        "late_fusion": False
+                    }
+
+                base_copy["config"]["num_workers"] = 0
+
+                base_copy["config"]["env_config"]["env_wrapper_options"] = env_wrapper_options
+                base_copy["config"]["model"]["custom_options"] = custom_model_options
                 exp_name = f"itr_{iteration}_{env_name}_frame_diff_{frame_diff}"
 
                 exps[exp_name] = base_copy

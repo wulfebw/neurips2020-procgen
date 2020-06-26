@@ -134,6 +134,23 @@ def create_video_from_observations(obs, video_filepath, fps=20, max_num_frames=2
     _, width, height, _ = obs.shape
     video = cv2.VideoWriter(video_filepath, 0, fps, (width, height))
     for image in obs:
+        if len(image.shape) == 2 or image.shape[-1] == 3:
+            # In this case, the image is the full observation, so just do nothing.
+            # Yeah, I know this if statement conditional isn't necessary, it's here for clarity.
+            pass
+        elif image.shape[-1] > 3:
+            # Need to extract the image obs from the stacked (frame-diffed one).
+            # Assume the last 3 channels are the actual image.
+            image = image[:, :, -3:]
+
+        if image.dtype != np.uint8:
+            # Convert to the right datatype.
+            # The assumption is that the image is normalized, but it's tough to correctly
+            # unnormalize it, so just downcast it and hope for the best.
+            image = image.astype(np.uint8)
+
+        video.write(image)
+
         video.write(image)
     video.release()
 
