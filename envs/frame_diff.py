@@ -13,7 +13,8 @@ class FrameDiff(gym.Wrapper):
 
         w, h, c = env.observation_space.shape
         self.num_diff_channels = 1 if self.grayscale else c
-        self.framebuff = np.zeros((w, h, self.num_diff_channels * (self.dt + 1)), dtype=self.dtype)
+        # Store the original observations as np.uint8 to use less memory.
+        self.framebuff = np.zeros((w, h, self.num_diff_channels * (self.dt + 1)), dtype=np.uint8)
 
         self.high_value = 255
 
@@ -26,8 +27,8 @@ class FrameDiff(gym.Wrapper):
         self.observation_space = gym.spaces.Box(low=low, high=high, dtype=self.dtype)
 
     def _frame_difference(self):
-        diff = (self.framebuff[:, :, -self.num_diff_channels:] -
-                self.framebuff[:, :, :self.num_diff_channels])
+        diff = (self.framebuff[:, :, -self.num_diff_channels:].astype(np.int16) -
+                self.framebuff[:, :, :self.num_diff_channels].astype(np.int16))
         diff = (diff + self.high_value) // 2
         return diff
 
