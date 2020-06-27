@@ -77,7 +77,7 @@ def write_experiments(base, num_iterations, env_names):
                         "late_fusion": False
                     }
 
-                base_copy["config"]["num_workers"] = 0
+                # base_copy["config"]["num_workers"] = 0
 
                 base_copy["config"]["env_config"]["env_wrapper_options"] = env_wrapper_options
                 base_copy["config"]["model"]["custom_options"] = custom_model_options
