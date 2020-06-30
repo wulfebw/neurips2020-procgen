@@ -48,7 +48,8 @@ def episode_adversarial_loss(policy, model, dist_class, train_batch):
         vf_loss_coeff=policy.config["vf_loss_coeff"],
         use_gae=policy.config["use_gae"],
     )
-    return model.custom_loss(policy.loss_obj.loss, train_batch[SampleBatch.EPS_ID])
+    return model.custom_loss(policy.loss_obj.loss, train_batch[SampleBatch.EPS_ID],
+                             policy.global_timestep)
 
 
 def episode_adversarial_stats(policy, train_batch):

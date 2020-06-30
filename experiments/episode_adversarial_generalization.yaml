@@ -1,4 +1,4 @@
-run_001_frame_stack_3_initial_filters_32:
+run_001_ep_adv:
     env: custom_procgen_env_wrapper  # Change this at your own risk :D
     run: custom/EpisodeAdversarialTrainer
     # Can be replaced by any of the available agents as described at : 
@@ -22,7 +22,7 @@ run_001_frame_stack_3_initial_filters_32:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/wulfebw/experiments/procgen_016
+    local_dir: /home/wulfebw/experiments/procgen_018
     ### END ADDED
     checkpoint_freq: 30
     checkpoint_at_end: True
@@ -36,9 +36,9 @@ run_001_frame_stack_3_initial_filters_32:
         ################################################
         env_config:
             # Name of the procgen environment to train on # Note, that this parameter will be overriden during the evaluation by the AIcrowd evaluators.
-            env_name: starpilot # coinrun # bigfish # dodgeball # heist # coinrun
+            env_name: bigfish # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
             # The number of unique levels that can be generated. Set to 0 to use unlimited levels
-            num_levels: 0
+            num_levels: 200
             # The lowest seed that will be used to generated levels. 'start_level' and 'num_levels' fully specify the set of possible levels
             start_level: 0
             # Paint player velocity info in the top left corner. Only supported by certain games.
@@ -62,7 +62,7 @@ run_001_frame_stack_3_initial_filters_32:
               "normalize_obs": False,
               "frame_stack": True,
               "frame_stack_options": {
-                "k": 3
+                "k": 2
               },
               "frame_stack_phase_correlation": False,
               "frame_stack_phase_correlation_options": {
@@ -91,7 +91,7 @@ run_001_frame_stack_3_initial_filters_32:
         num_sgd_iter: 3
         # Total SGD batch size across all devices for SGD. This defines the
         # minibatch size within each epoch.
-        sgd_minibatch_size: 512 # 2048 # 8 minibatches per epoch
+        sgd_minibatch_size: 2048 # 8 minibatches per epoch
         # Training batch size, if applicable. Should be >= rollout_fragment_length.
         # Samples batches will be concatenated together to a batch of this size,
         # which is then passed to SGD.
@@ -218,10 +218,15 @@ run_001_frame_stack_3_initial_filters_32:
             custom_model: episode_adversarial
             # Extra options to pass to custom class
             custom_options: {
-              "discriminator_weight": 0,
               "l2_weight": 0.0001,
               "late_fusion": False,
-              "num_filters": [32, 32, 32]
+              "num_filters": [16, 32, 32],
+              "ep_adv_loss_schedule_options": {
+                "schedule_timesteps": 8000000,
+                "final_p": 1.0,
+                "initial_p": 0.0,
+                "power": 2.0
+              }
             }
 
         ################################################
@@ -231,12 +236,12 @@ run_001_frame_stack_3_initial_filters_32:
         ################################################
         # Number of rollout worker actors to create for parallel sampling. Setting
         # this to 0 will force rollouts to be done in the trainer actor.
-        num_workers: 4 # 6
+        num_workers: 1 # 4 # 6
 
         # Number of environments to evaluate vectorwise per worker. This enables
         # model inference batching, which can improve performance for inference
         # bottlenecked workloads.
-        num_envs_per_worker: 16 # 12
+        num_envs_per_worker: 64 # 16 # 12
 
         # Divide episodes into fragments of this many steps each during rollouts.
         # Sample batches of this size are collected from rollout workers and
@@ -271,7 +276,7 @@ run_001_frame_stack_3_initial_filters_32:
         # Number of GPUs to allocate per worker. This can be fractional. This is
         # usually needed only if your env itself requires a GPU (i.e., it is a
         # GPU-intensive video game), or model inference is unusually expensive.
-        num_gpus_per_worker: 0.08
+        num_gpus_per_worker: 0.05
         # Number of CPUs to allocate for the trainer. Note: this only takes effect
         # when running in Tune. Otherwise, the trainer runs in the main program.
         num_cpus_for_driver: 1
@@ -285,7 +290,7 @@ run_001_frame_stack_3_initial_filters_32:
         # algorithms can take advantage of trainer GPUs. This can be fractional
         # (e.g., 0.3 GPUs).
         # Note : If GPUs are not available, this will be overriden by the AIcrowd evaluators to 0.
-        num_gpus: 0.6
+        num_gpus: 0.9
 
         ################################################
         ################################################
@@ -330,7 +335,7 @@ run_001_frame_stack_3_initial_filters_32:
         # === Evaluation Settings ===
         ################################################
         ################################################
-        # evaluation_interval: 10
-        # evaluation_num_episodes: 10
-        # evaluation_num_workers: 0
-        # evaluation_config: {"env_config": {"num_levels": 0}}
+        evaluation_interval: 10
+        evaluation_num_episodes: 15
+        evaluation_num_workers: 0
+        evaluation_config: {"env_config": {"num_levels": 0}}
