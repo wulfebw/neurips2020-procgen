@@ -18,6 +18,11 @@ def _import_custom_random_agent():
     return CustomRandomAgent
 
 
+def _import_random_policy():
+    from .random_agent.trainer import RandomAgentTrainer
+    return RandomAgentTrainer
+
+
 def _import_monet_agent():
     from .monet_agent.monet_agent import MONetTrainer
     return MONetTrainer
@@ -38,4 +43,5 @@ CUSTOM_ALGORITHMS = {
     "custom/MONetTrainer": _import_monet_agent,
     "custom/EpisodeAdversarialTrainer": _import_episode_adversarial_agent,
     "custom/DataAugmentingPPOTrainer": _import_data_augmenting_ppo_agent,
+    "RandomPolicy": _import_random_policy,
 }
