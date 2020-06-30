@@ -2,8 +2,9 @@ from ray.rllib.models.modelv2 import ModelV2
 from ray.rllib.models.torch.misc import SlimFC, normc_initializer
 from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
 from ray.rllib.models import ModelCatalog
-from ray.rllib.utils.annotations import override
 from ray.rllib.utils import try_import_torch
+from ray.rllib.utils.annotations import override
+from ray.rllib.utils.schedules.polynomial_schedule import PolynomialSchedule
 
 torch, nn = try_import_torch()
 
@@ -102,8 +103,16 @@ class ReverseLayerF(torch.autograd.Function):
 
 
 class EpisodeAdversarialModel(TorchModelV2, nn.Module):
-    def __init__(self, obs_space, action_space, num_outputs, model_config, name,
-                 discriminator_weight, l2_weight, late_fusion):
+    def __init__(self,
+                 obs_space,
+                 action_space,
+                 num_outputs,
+                 model_config,
+                 name,
+                 l2_weight,
+                 late_fusion,
+                 ep_adv_loss_schedule_options,
+                 num_filters=[16, 32, 32]):
         TorchModelV2.__init__(self, obs_space, action_space, num_outputs, model_config, name)
         nn.Module.__init__(self)
 
@@ -120,7 +129,7 @@ class EpisodeAdversarialModel(TorchModelV2, nn.Module):
             shape = tuple(shape)
             out_channels_list = [32, 32]
         else:
-            out_channels_list = [16, 32, 32]
+            out_channels_list = num_filters
 
         conv_seqs = []
         for out_channels in out_channels_list:
@@ -135,11 +144,12 @@ class EpisodeAdversarialModel(TorchModelV2, nn.Module):
 
         self.discriminator = EpisodeDiscriminator(input_size=256)
         self.discriminator_loss_fn = nn.BCEWithLogitsLoss(reduction="mean")
-        self.discriminator_weight = discriminator_weight
+
+        self.ep_adv_loss_weight = PolynomialSchedule(framework="torch",
+                                                     **ep_adv_loss_schedule_options)
         self.l2_weight = l2_weight
 
         self.late_fusion = late_fusion
-        # self.t = 0
 
     @override(TorchModelV2)
     def forward(self, input_dict, state, seq_lens):
@@ -195,7 +205,8 @@ class EpisodeAdversarialModel(TorchModelV2, nn.Module):
         stats["discriminator"] = {
             "loss": float(self.discriminator_loss.detach().cpu()),
             "accuracy": self.accuracy,
-            "avg_prc": self.avg_prc
+            "avg_prc": self.avg_prc,
+            "discriminator_loss_weight_value": self.ep_adv_loss_weight_value
         }
         return stats
 
@@ -206,7 +217,7 @@ class EpisodeAdversarialModel(TorchModelV2, nn.Module):
                 value += torch.square(param).sum()
         return value
 
-    def custom_loss(self, policy_loss, episode_ids):
+    def custom_loss(self, policy_loss, episode_ids, global_timestep):
         batch_size = self.features.shape[0]
         perm = torch.randperm(batch_size)
         alpha = 1.0
@@ -220,8 +231,9 @@ class EpisodeAdversarialModel(TorchModelV2, nn.Module):
         targets = (episode_ids == episode_ids[perm]).view(-1, 1).to(torch.float32)
 
         # Discriminator loss.
-        self.discriminator_loss = self.discriminator_loss_fn(logits,
-                                                             targets) * self.discriminator_weight
+        self.ep_adv_loss_weight_value = self.ep_adv_loss_weight.value(global_timestep)
+        self.discriminator_loss = (self.discriminator_loss_fn(logits, targets) *
+                                   self.ep_adv_loss_weight_value)
 
         # Discriminator metrics.
         probs = torch.sigmoid(logits).detach().cpu().numpy()

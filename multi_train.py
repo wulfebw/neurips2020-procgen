@@ -37,51 +37,41 @@ def write_experiments(base, num_iterations, env_names):
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
         for iteration in range(num_iterations):
-            for frame_diff in [True, False]:
-                # for ep_adv_weight in [0, 1]:
+            for discriminator_weight in [1, 0.5, 0.1]:
+                # for frame_stack, phase_correlate in [(True, True)]:
 
                 base_copy = copy.deepcopy(base)
                 base_copy["local_dir"] = env_dir
                 base_copy["config"]["env_config"]["env_name"] = env_name
 
-                # base_copy["config"]["model"]["custom_options"][
-                #     "discriminator_weight"] = ep_adv_weight
-                # exp_name = f"itr_{iteration}_{env_name}_ep_adv_{ep_adv_weight}"
+                #     env_wrapper_options = {
+                #         "frame_diff": False,
+                #         "frame_diff_options": {
+                #             "grayscale": False,
+                #             "dt": 2
+                #         },
+                #         "normalize_obs": False,
+                #         "frame_stack": frame_stack,
+                #         "frame_stack_options": {
+                #             "phase_correlate": phase_correlate
+                #         }
+                #     }
+                # base_copy["config"]["env_config"]["env_wrapper_options"] = env_wrapper_options
 
-                if frame_diff:
-                    env_wrapper_options = {
-                        "frame_diff": True,
-                        "frame_diff_options": {
-                            "grayscale": False,
-                            "dt": 2
-                        },
-                        "normalize_obs": True
-                    }
-                    custom_model_options = {
-                        "discriminator_weight": 0,
-                        "l2_weight": 0.0001,
-                        "late_fusion": True
-                    }
-                else:
-                    env_wrapper_options = {
-                        "frame_diff": False,
-                        "frame_diff_options": {
-                            "grayscale": False,
-                            "dt": 2
-                        },
-                        "normalize_obs": False
-                    }
-                    custom_model_options = {
-                        "discriminator_weight": 0,
-                        "l2_weight": 0.0001,
-                        "late_fusion": False
-                    }
-
-                # base_copy["config"]["num_workers"] = 0
-
-                base_copy["config"]["env_config"]["env_wrapper_options"] = env_wrapper_options
+                custom_model_options = {
+                    "ep_adv_loss_schedule_options": {
+                        "schedule_timesteps": 8000000,
+                        "final_p": discriminator_weight,
+                        "initial_p": 0.0,
+                        "power": 0.5
+                    },
+                    "l2_weight": 0.0001,
+                    "late_fusion": False,
+                    "num_filters": [16, 32, 32]
+                }
                 base_copy["config"]["model"]["custom_options"] = custom_model_options
-                exp_name = f"itr_{iteration}_{env_name}_frame_diff_{frame_diff}"
+
+                exp_name = f"itr_{iteration}_{env_name}_ep_adv_{discriminator_weight}"
 
                 exps[exp_name] = base_copy
 

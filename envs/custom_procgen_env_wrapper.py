@@ -1,9 +1,11 @@
 import copy
 
 import numpy as np
+from ray.rllib.env.atari_wrappers import FrameStack
 from ray.tune import registry
 
 from envs.frame_diff import FrameDiff
+from envs.frame_stack_phase_correlation import FrameStackPhaseCorrelation
 from envs.mean_normalize_image_obs import MeanNormalizeImageObs
 from envs.procgen_env_wrapper import ProcgenEnvWrapper
 
@@ -47,13 +49,25 @@ def get_obs_mean(env_name, frame_diff, frame_diff_options):
     return mean
 
 
-def wrap_procgen(env, frame_diff=True, frame_diff_options={}, normalize_obs=True):
+def wrap_procgen(env,
+                 frame_diff=False,
+                 frame_diff_options={},
+                 normalize_obs=False,
+                 frame_stack=False,
+                 frame_stack_options={},
+                 frame_stack_phase_correlation=False,
+                 frame_stack_phase_correlation_options={}):
     env_name = env.env_name
     if frame_diff:
         env = FrameDiff(env, **frame_diff_options)
     if normalize_obs:
         mean = get_obs_mean(env_name, frame_diff, frame_diff_options)
         env = MeanNormalizeImageObs(env, mean)
+    if frame_stack:
+        env = FrameStack(env, **frame_stack_options)
+    if frame_stack_phase_correlation:
+        env = FrameStackPhaseCorrelation(env, **frame_stack_phase_correlation_options)
+
     return env
 
 

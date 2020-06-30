@@ -192,6 +192,10 @@ def run(args, parser):
         with open(config_path, "rb") as f:
             config = pickle.load(f)
 
+    # When you don't want to run with any gpus.
+    config["num_gpus_per_worker"] = 0
+    config["num_gpus"] = 0
+    
     config["num_workers"] = 1
     # # Set num_workers to be at least 2.
     # if "num_workers" in config:
@@ -283,6 +287,7 @@ def rollout(agent, env_name, num_steps, num_episodes=0, video_dir=None):
     vis_info = collections.defaultdict(list)
     steps = 0
     episodes = 0
+    all_ep_total_reward = 0
     while keep_going(steps, num_steps, episodes, num_episodes):
         mapping_cache = {}  # in case policy_agent_mapping is stochastic
         obs = env.reset()
@@ -343,8 +348,11 @@ def rollout(agent, env_name, num_steps, num_episodes=0, video_dir=None):
             steps += 1
             obs = next_obs
         print("Episode #{}: reward: {} steps: {}".format(episodes, reward_total, episode_steps))
+        all_ep_total_reward += reward_total
         if done:
             episodes += 1
+
+    print(f"Average episode reward: {all_ep_total_reward / episodes:.4f}")
     return vis_info
 
 
