@@ -28,8 +28,14 @@ def _import_episode_adversarial_agent():
     return EpisodeAdversarialTrainer
 
 
+def _import_data_augmenting_ppo_agent():
+    from .data_augmenting_ppo_agent.data_augmenting_ppo_agent import DataAugmentingPPOTrainer
+    return DataAugmentingPPOTrainer
+
+
 CUSTOM_ALGORITHMS = {
     "custom/CustomRandomAgent": _import_custom_random_agent,
     "custom/MONetTrainer": _import_monet_agent,
     "custom/EpisodeAdversarialTrainer": _import_episode_adversarial_agent,
+    "custom/DataAugmentingPPOTrainer": _import_data_augmenting_ppo_agent,
 }
