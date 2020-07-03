@@ -37,7 +37,7 @@ def write_experiments(base, num_iterations, env_names):
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
         for iteration in range(num_iterations):
-            for transforms in [[], ["random_translate"]]:
+            for transforms in [["random_translate"]]:
                 # This information is common to all the experiments.
                 base_copy = copy.deepcopy(base)
                 base_copy["local_dir"] = env_dir
@@ -57,24 +57,6 @@ def write_experiments(base, num_iterations, env_names):
                 base_copy["config"]["model"]["custom_options"] = custom_model_options
                 exp_name = f"itr_{iteration}_{env_name}_{transform_string}"
                 exps[exp_name] = base_copy
-
-                # Larger network with and without transform.
-                larger_network = copy.deepcopy(base_copy)
-                larger_network["config"]["model"]["custom_options"]["num_filters"] = [32, 32, 32]
-                exp_name = f"itr_{iteration}_{env_name}_{transform_string}_larger_network"
-                exps[exp_name] = larger_network
-
-                # 2x training epochs.
-                train_2x = copy.deepcopy(base_copy)
-                train_2x["config"]["num_sgd_iter"] = 6
-                exp_name = f"itr_{iteration}_{env_name}_{transform_string}_train_2x"
-                exps[exp_name] = train_2x
-
-                # 5x training epochs.
-                train_5x = copy.deepcopy(base_copy)
-                train_5x["config"]["num_sgd_iter"] = 15
-                exp_name = f"itr_{iteration}_{env_name}_{transform_string}_train_5x"
-                exps[exp_name] = train_5x
 
     os.makedirs(base["local_dir"], exist_ok=True)
     exps_filepath = os.path.join(base["local_dir"], "experiments.yaml")

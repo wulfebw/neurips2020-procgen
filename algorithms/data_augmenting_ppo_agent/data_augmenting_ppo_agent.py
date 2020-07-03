@@ -18,13 +18,13 @@ from ray.rllib.utils.torch_ops import sequence_mask
 
 torch, nn = try_import_torch()
 
-from algorithms.data_augmenting_ppo_agent.data_augmentation import random_translate
+from algorithms.data_augmenting_ppo_agent.data_augmentation import random_translate_via_index
 
 
 def apply_data_augmentation(imgs, options):
     transform = np.random.choice(options["transforms"])
     if transform == "random_translate":
-        return random_translate(imgs, **options["random_translate_options"])
+        return random_translate_via_index(imgs, **options["random_translate_options"])
     raise ValueError(f"Invalid transform {transform}")
 
 
