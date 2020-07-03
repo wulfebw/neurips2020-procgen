@@ -37,43 +37,44 @@ def write_experiments(base, num_iterations, env_names):
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
         for iteration in range(num_iterations):
-            for discriminator_weight in [1, 0.5, 0.1]:
-                # for frame_stack, phase_correlate in [(True, True)]:
-
+            for transforms in [[], ["random_translate"]]:
+                # This information is common to all the experiments.
                 base_copy = copy.deepcopy(base)
                 base_copy["local_dir"] = env_dir
                 base_copy["config"]["env_config"]["env_name"] = env_name
 
-                #     env_wrapper_options = {
-                #         "frame_diff": False,
-                #         "frame_diff_options": {
-                #             "grayscale": False,
-                #             "dt": 2
-                #         },
-                #         "normalize_obs": False,
-                #         "frame_stack": frame_stack,
-                #         "frame_stack_options": {
-                #             "phase_correlate": phase_correlate
-                #         }
-                #     }
-                # base_copy["config"]["env_config"]["env_wrapper_options"] = env_wrapper_options
+                with_transforms = len(transforms) > 0
+                transform_string = "with_transforms" if with_transforms else "without_transforms"
 
+                # Random translate versus baseline.
                 custom_model_options = {
-                    "ep_adv_loss_schedule_options": {
-                        "schedule_timesteps": 8000000,
-                        "final_p": discriminator_weight,
-                        "initial_p": 0.0,
-                        "power": 0.5
-                    },
-                    "l2_weight": 0.0001,
-                    "late_fusion": False,
-                    "num_filters": [16, 32, 32]
+                    "num_filters": [16, 32, 32],
+                    "data_augmentation_options": {
+                        "transforms": transforms,
+                        "random_translate_options": {}
+                    }
                 }
                 base_copy["config"]["model"]["custom_options"] = custom_model_options
-
-                exp_name = f"itr_{iteration}_{env_name}_ep_adv_{discriminator_weight}"
-
+                exp_name = f"itr_{iteration}_{env_name}_{transform_string}"
                 exps[exp_name] = base_copy
+
+                # Larger network with and without transform.
+                larger_network = copy.deepcopy(base_copy)
+                larger_network["config"]["model"]["custom_options"]["num_filters"] = [32, 32, 32]
+                exp_name = f"itr_{iteration}_{env_name}_{transform_string}_larger_network"
+                exps[exp_name] = larger_network
+
+                # 2x training epochs.
+                train_2x = copy.deepcopy(base_copy)
+                train_2x["config"]["num_sgd_iter"] = 6
+                exp_name = f"itr_{iteration}_{env_name}_{transform_string}_train_2x"
+                exps[exp_name] = train_2x
+
+                # 5x training epochs.
+                train_5x = copy.deepcopy(base_copy)
+                train_5x["config"]["num_sgd_iter"] = 15
+                exp_name = f"itr_{iteration}_{env_name}_{transform_string}_train_5x"
+                exps[exp_name] = train_5x
 
     os.makedirs(base["local_dir"], exist_ok=True)
     exps_filepath = os.path.join(base["local_dir"], "experiments.yaml")
