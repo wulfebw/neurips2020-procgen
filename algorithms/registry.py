@@ -19,8 +19,8 @@ def _import_custom_random_agent():
 
 
 def _import_random_policy():
-    from .random_agent.trainer import RandomAgentTrainer
-    return RandomAgentTrainer
+    from .random_policy.trainer import RandomPolicyTrainer
+    return RandomPolicyTrainer
 
 
 def _import_monet_agent():
