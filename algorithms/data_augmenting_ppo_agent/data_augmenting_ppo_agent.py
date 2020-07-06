@@ -18,24 +18,45 @@ from ray.rllib.utils.torch_ops import sequence_mask
 
 torch, nn = try_import_torch()
 
-from algorithms.data_augmenting_ppo_agent.data_augmentation import random_translate_via_index
+from algorithms.data_augmenting_ppo_agent.data_augmentation import (random_translate_via_index,
+                                                                    random_cutout_color_fast,
+                                                                    random_cutout,
+                                                                    random_channel_drop)
 
 
 def apply_data_augmentation(imgs, options):
-    transform = np.random.choice(options["transforms"])
-    if transform == "random_translate":
-        return random_translate_via_index(imgs, **options["random_translate_options"])
-    raise ValueError(f"Invalid transform {transform}")
+    num_transforms = len(options["transforms"])
+    assert num_transforms > 0
+    num_samples = len(imgs)
+    assert num_samples > num_transforms
+    num_samples_per_transform = num_samples // num_transforms
+    transform_indices = np.random.permutation(num_transforms)
+
+    for i, transform_index in enumerate(transform_indices):
+        transform = options["transforms"][transform_index]
+        start = i * num_samples_per_transform
+        end = start + num_samples_per_transform
+        if i == num_transforms - 1:
+            end = num_samples
+        if transform == "random_translate":
+            imgs[start:end] = random_translate_via_index(
+                imgs[start:end], **options.get("random_translate_options", {}))
+        elif transform == "random_cutout_color":
+            imgs[start:end] = random_cutout_color_fast(
+                imgs[start:end], **options.get("random_cutout_color_options", {}))
+        elif transform == "random_cutout":
+            imgs[start:end] = random_cutout(imgs[start:end],
+                                            **options.get("random_cutout_options", {}))
+        elif transform == "random_channel_drop":
+            imgs[start:end] = random_channel_drop(imgs[start:end],
+                                                  **options.get("random_channel_drop_options", {}))
+        else:
+            raise NotImplementedError(f"Transform not implemented {transform}")
+
+    return imgs
 
 
-def data_augmenting_loss(policy, model, dist_class, train_batch):
-    if len(model.data_augmentation_options["transforms"]) > 0:
-        train_batch["obs"] = apply_data_augmentation(train_batch["obs"],
-                                                     model.data_augmentation_options)
-
-    logits, state = model.from_batch(train_batch)
-    action_dist = dist_class(logits, model)
-
+def compute_ppo_loss(policy, dist_class, model, train_batch, action_dist, state):
     mask = None
     if state:
         max_seq_len = torch.max(train_batch["seq_lens"])
@@ -61,7 +82,68 @@ def data_augmenting_loss(policy, model, dist_class, train_batch):
         vf_loss_coeff=policy.config["vf_loss_coeff"],
         use_gae=policy.config["use_gae"],
     )
+
     return policy.loss_obj.loss
+
+
+def drac_data_augmenting_loss(policy,
+                              model,
+                              dist_class,
+                              train_batch,
+                              drac_weight,
+                              drac_value_weight=1,
+                              drac_policy_weight=1):
+    assert len(model.data_augmentation_options["transforms"]) > 0
+
+    no_aug_logits, no_aug_state = model.from_batch(train_batch)
+    no_aug_action_dist = dist_class(no_aug_logits, model)
+    no_aug_action_dist_detached = dist_class(no_aug_logits.detach(), model)
+    no_aug_value = model.value_function().detach()
+
+    policy_loss = compute_ppo_loss(policy, dist_class, model, train_batch, no_aug_action_dist,
+                                   no_aug_state)
+
+    train_batch["obs"] = apply_data_augmentation(train_batch["obs"],
+                                                 model.data_augmentation_options)
+    aug_logits, aug_state = model.from_batch(train_batch)
+    aug_action_dist = dist_class(aug_logits, model)
+    aug_value = model.value_function()
+
+    data_aug_value_loss = 0.5 * ((no_aug_value - aug_value)**2).mean()
+    data_aug_policy_loss = aug_action_dist.kl(no_aug_action_dist_detached).mean()
+    data_aug_loss = drac_value_weight * data_aug_value_loss + drac_policy_weight * data_aug_policy_loss
+
+    return policy_loss + drac_weight * data_aug_loss
+
+
+def simple_data_augmenting_loss(policy, model, dist_class, train_batch):
+    assert len(model.data_augmentation_options["transforms"]) > 0
+
+    train_batch["obs"] = apply_data_augmentation(train_batch["obs"],
+                                                 model.data_augmentation_options)
+    logits, state = model.from_batch(train_batch)
+    action_dist = dist_class(logits, model)
+    return compute_ppo_loss(policy, dist_class, model, train_batch, action_dist, state)
+
+
+def no_data_augmenting_loss(policy, model, dist_class, train_batch):
+    logits, state = model.from_batch(train_batch)
+    action_dist = dist_class(logits, model)
+    return compute_ppo_loss(policy, dist_class, model, train_batch, action_dist, state)
+
+
+def data_augmenting_loss(policy, model, dist_class, train_batch):
+    mode = model.data_augmentation_options["mode"]
+    mode_options = model.data_augmentation_options["mode_options"].get(mode, {})
+
+    if mode == "none":
+        return no_data_augmenting_loss(policy, model, dist_class, train_batch, **mode_options)
+    elif mode == "simple":
+        return simple_data_augmenting_loss(policy, model, dist_class, train_batch, **mode_options)
+    elif mode == "drac":
+        return drac_data_augmenting_loss(policy, model, dist_class, train_batch, **mode_options)
+    else:
+        raise ValueError(f"Invalid data augmenting mode: {model.data_augmentation_options['mode']}")
 
 
 def data_augmenting_stats(policy, train_batch):
