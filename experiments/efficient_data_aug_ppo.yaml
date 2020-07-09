@@ -17,12 +17,13 @@ run_001_drac:
     ################################################
     stop:
         timesteps_total: 8000000
+        # time_total_s: 7200
 
     ################################################
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    # local_dir: /home/wulfebw/experiments/procgen_024
+    local_dir: /home/wulfebw/experiments/procgen_023
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -91,7 +92,7 @@ run_001_drac:
         num_sgd_iter: 3
         # Total SGD batch size across all devices for SGD. This defines the
         # minibatch size within each epoch.
-        sgd_minibatch_size: 2048 # 2048 # 8 minibatches per epoch
+        sgd_minibatch_size: 512 # 2048 # 8 minibatches per epoch
         # Training batch size, if applicable. Should be >= rollout_fragment_length.
         # Samples batches will be concatenated together to a batch of this size,
         # which is then passed to SGD.
@@ -215,17 +216,14 @@ run_001_drac:
             # Examples of implementing the model in Keras is also available
             # here :
             # https://github.com/ray-project/ray/blob/master/rllib/examples/custom_keras_model.py
-            custom_model: custom_impala_cnn_torch
+            custom_model: split_impala_cnn_torch
             # Extra options to pass to custom class
             custom_options: {
-              "num_filters": [16, 32, 32],
-              "data_augmentation_options": {
-                "mode": "drac",
-                "mode_options": {
-                  "drac": {"drac_weight": 0.2, "drac_value_weight": 1, "drac_policy_weight": 1}
-                },
-                "transforms": ["random_translate"],
-
+              "common_filters": [16],
+              "policy_filters": [32, 32],
+              "value_filters": [32, 32],
+              "value_options": {
+                "random_crop": True
               }
             }
 
@@ -335,7 +333,7 @@ run_001_drac:
         # === Evaluation Settings ===
         ################################################
         ################################################
-        # evaluation_interval: 30
-        # evaluation_num_episodes: 30
-        # evaluation_num_workers: 0
-        # evaluation_config: {"env_config": {"num_levels": 0}}
+        evaluation_interval: 30
+        evaluation_num_episodes: 30
+        evaluation_num_workers: 0
+        evaluation_config: {"env_config": {"num_levels": 0}}
