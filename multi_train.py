@@ -43,7 +43,7 @@ def write_experiments(base, num_iterations, env_names):
             base_copy["config"]["env_config"]["env_name"] = env_name
 
             for transforms in [["random_translate"]]:
-                for data_aug_mode in ["simple"]:
+                for data_aug_mode in ["drac"]:
                     # This information is common to all the experiments.
                     base_copy = copy.deepcopy(base)
                     base_copy["local_dir"] = env_dir
@@ -66,7 +66,7 @@ def write_experiments(base, num_iterations, env_names):
                     }
                     base_copy["config"]["model"]["custom_options"] = custom_model_options
                     transform_string = "_".join(transforms)
-                    exp_name = f"itr_{iteration}_{env_name}_{data_aug_mode}_transforms_{transform_string}"
+                    exp_name = f"itr_{iteration}_{env_name}_{data_aug_mode}_transforms_{transform_string}_2_sgd_iter"
                     exps[exp_name] = base_copy
 
     os.makedirs(base["local_dir"], exist_ok=True)
