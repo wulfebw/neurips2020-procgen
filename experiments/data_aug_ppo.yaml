@@ -88,14 +88,14 @@ run_001_drac:
         lr: 5.0e-4
         # Number of SGD iterations in each outer loop (i.e., number of epochs to
         # execute per train batch).
-        num_sgd_iter: 3
+        num_sgd_iter: 2
         # Total SGD batch size across all devices for SGD. This defines the
         # minibatch size within each epoch.
-        sgd_minibatch_size: 900 # 2048 # 8 minibatches per epoch
+        sgd_minibatch_size: 880 # 2048 # 8 minibatches per epoch
         # Training batch size, if applicable. Should be >= rollout_fragment_length.
         # Samples batches will be concatenated together to a batch of this size,
         # which is then passed to SGD.
-        train_batch_size: 14400 # 16384 # 256 * 64
+        train_batch_size: 14080 # 16384 # 256 * 64
         # Initial coefficient for KL divergence.
         kl_coeff: 0.0
         # Target value for KL divergence.
@@ -225,8 +225,8 @@ run_001_drac:
                   "drac": {"drac_weight": 0.2, "drac_value_weight": 1, "drac_policy_weight": 1}
                 },
                 "transforms": ["random_translate"],
-
-              }
+              },
+              "batch_norm": False
             }
 
         ################################################
@@ -241,7 +241,7 @@ run_001_drac:
         # Number of environments to evaluate vectorwise per worker. This enables
         # model inference batching, which can improve performance for inference
         # bottlenecked workloads.
-        num_envs_per_worker: 16 # 64 # 16 # 12
+        num_envs_per_worker: 32 # 64 # 16 # 12
 
         # Divide episodes into fragments of this many steps each during rollouts.
         # Sample batches of this size are collected from rollout workers and
@@ -258,7 +258,7 @@ run_001_drac:
         #
         # The dataflow here can vary per algorithm. For example, PPO further
         # divides the train batch into minibatches for multi-epoch SGD.
-        rollout_fragment_length: 225 # 256
+        rollout_fragment_length: 110 # 256
 
         # Whether to rollout "complete_episodes" or "truncate_episodes" to
         # `rollout_fragment_length` length unrolls. Episode truncation guarantees

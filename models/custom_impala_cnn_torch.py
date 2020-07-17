@@ -22,6 +22,14 @@ class ResidualBlock(nn.Module):
                                padding=1)
         self.conv1_bn = nn.BatchNorm2d(channels)
 
+    def set_batch_norm_mode(self, mode):
+        if mode == "train":
+            self.conv0_bn.train()
+            self.conv1_bn.train()
+        elif mode == "eval":
+            self.conv0_bn.eval()
+            self.conv1_bn.eval()
+
     def forward(self, x):
         inputs = x
         x = nn.functional.relu(x)
@@ -46,19 +54,27 @@ class ConvSequence(nn.Module):
                               out_channels=self._out_channels,
                               kernel_size=3,
                               padding=1)
-        self.conv_bn = nn.BatchNorm2d(self._out_channels)
-        self.res_block0 = ResidualBlock(self._out_channels, batch_norm=batch_norm)
-        self.res_block1 = ResidualBlock(self._out_channels, batch_norm=batch_norm)
+        self.conv_bn = nn.BatchNorm2d(self._out_channels, momentum=0.01)
+        self.res_block0 = ResidualBlock(self._out_channels, batch_norm=False)
+        self.res_block1 = ResidualBlock(self._out_channels, batch_norm=False)
 
     def forward(self, x):
         x = self.conv(x)
         x = nn.functional.max_pool2d(x, kernel_size=3, stride=2, padding=1)
-        if self._batch_norm:
-            x = self.conv_bn(x)
         x = self.res_block0(x)
         x = self.res_block1(x)
+        if self._batch_norm:
+            x = self.conv_bn(x)
         assert x.shape[1:] == self.get_output_shape()
         return x
+
+    def set_batch_norm_mode(self, mode):
+        if mode == "train":
+            self.conv_bn.train()
+        elif mode == "eval":
+            self.conv_bn.eval()
+        # self.res_block0.set_batch_norm_mode(mode)
+        # self.res_block1.set_batch_norm_mode(mode)
 
     def get_output_shape(self):
         _c, h, w = self._input_shape
@@ -73,7 +89,8 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
                  model_config,
                  name,
                  num_filters=[16, 32, 32],
-                 data_augmentation_options={}):
+                 data_augmentation_options={},
+                 batch_norm=False):
         TorchModelV2.__init__(self, obs_space, action_space, num_outputs, model_config, name)
         nn.Module.__init__(self)
 
@@ -86,7 +103,7 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
 
         conv_seqs = []
         for out_channels in num_filters:
-            conv_seq = ConvSequence(shape, out_channels)
+            conv_seq = ConvSequence(shape, out_channels, batch_norm=batch_norm)
             shape = conv_seq.get_output_shape()
             conv_seqs.append(conv_seq)
         self.conv_seqs = nn.ModuleList(conv_seqs)
@@ -94,9 +111,21 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
         self.logits_fc = nn.Linear(in_features=256, out_features=num_outputs)
         self.value_fc = nn.Linear(in_features=256, out_features=1)
 
+        # This is set externally during training.
+        self.update_batch_norm = None
+
     @override(TorchModelV2)
     def forward(self, input_dict, state, seq_lens):
         x = input_dict["obs"].float()
+
+        if self._in_rollout(x):
+            self.update_batch_norm = False
+
+        if not self.update_batch_norm:
+            self.set_batch_norm_mode("eval")
+        else:
+            self.set_batch_norm_mode("train")
+
         x = x / 255.0  # scale to 0-1
         x = x.permute(0, 3, 1, 2)  # NHWC => NCHW
         for conv_seq in self.conv_seqs:
@@ -109,6 +138,13 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
         value = self.value_fc(x)
         self._value = value.squeeze(1)
         return logits, state
+
+    def _in_rollout(self, x):
+        return len(x) < 512
+
+    def set_batch_norm_mode(self, mode):
+        for conv_seq in self.conv_seqs:
+            conv_seq.set_batch_norm_mode(mode)
 
     @override(TorchModelV2)
     def value_function(self):

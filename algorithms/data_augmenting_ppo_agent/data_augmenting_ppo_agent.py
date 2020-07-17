@@ -105,7 +105,9 @@ def drac_data_augmenting_loss(policy,
 
     train_batch["obs"] = apply_data_augmentation(train_batch["obs"],
                                                  model.data_augmentation_options)
+    model.update_batch_norm = True
     aug_logits, aug_state = model.from_batch(train_batch)
+    model.update_batch_norm = False
     aug_action_dist = dist_class(aug_logits, model)
     aug_value = model.value_function()
 
