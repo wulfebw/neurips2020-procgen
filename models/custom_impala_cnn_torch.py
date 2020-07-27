@@ -37,24 +37,31 @@ class ResidualBlock(nn.Module):
 
 
 class ConvSequence(nn.Module):
-    def __init__(self, input_shape, out_channels, batch_norm=False):
+    def __init__(self, input_shape, out_channels, batch_norm=False, dropout_prob=0.0):
         super().__init__()
         self._input_shape = input_shape
         self._out_channels = out_channels
         self._batch_norm = batch_norm
+        self._dropout_prob = dropout_prob
+        assert not batch_norm and dropout_prob > 0
+
         self.conv = nn.Conv2d(in_channels=self._input_shape[0],
                               out_channels=self._out_channels,
                               kernel_size=3,
                               padding=1)
-        self.conv_bn = nn.BatchNorm2d(self._out_channels)
         self.res_block0 = ResidualBlock(self._out_channels, batch_norm=batch_norm)
         self.res_block1 = ResidualBlock(self._out_channels, batch_norm=batch_norm)
+
+        self.conv_bn = nn.BatchNorm2d(self._out_channels)
+        self.dropout_layer = nn.Dropout2d(self._dropout_prob)
 
     def forward(self, x):
         x = self.conv(x)
         x = nn.functional.max_pool2d(x, kernel_size=3, stride=2, padding=1)
         if self._batch_norm:
             x = self.conv_bn(x)
+        elif self._dropout_prob > 0:
+            x = self.dropout_layer(x)
         x = self.res_block0(x)
         x = self.res_block1(x)
         assert x.shape[1:] == self.get_output_shape()
@@ -63,6 +70,18 @@ class ConvSequence(nn.Module):
     def get_output_shape(self):
         _c, h, w = self._input_shape
         return (self._out_channels, (h + 1) // 2, (w + 1) // 2)
+
+    def set_norm_layer_mode(self, mode):
+        if mode == "train":
+            if self._batch_norm:
+                self.conv_bn.train()
+            elif self._dropout_prob > 0:
+                self.dropout_layer.train()
+        elif mode == "eval":
+            if self._batch_norm:
+                self.conv_bn.eval()
+            elif self._dropout_prob > 0:
+                self.dropout_layer.eval()
 
 
 class CustomImpalaCNN(TorchModelV2, nn.Module):
@@ -73,20 +92,24 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
                  model_config,
                  name,
                  num_filters=[16, 32, 32],
-                 data_augmentation_options={}):
+                 data_augmentation_options={},
+                 dropout_prob=0.0,
+                 optimizer_options={}):
         TorchModelV2.__init__(self, obs_space, action_space, num_outputs, model_config, name)
         nn.Module.__init__(self)
 
         # This is a hack to make custom options accessible to the policy.
         # It must be stored on this class.
         self.data_augmentation_options = data_augmentation_options
+        self.dropout_prob = dropout_prob
+        self.optimizer_options = optimizer_options
 
         h, w, c = obs_space.shape
         shape = (c, h, w)
 
         conv_seqs = []
         for out_channels in num_filters:
-            conv_seq = ConvSequence(shape, out_channels)
+            conv_seq = ConvSequence(shape, out_channels, dropout_prob=self.dropout_prob)
             shape = conv_seq.get_output_shape()
             conv_seqs.append(conv_seq)
         self.conv_seqs = nn.ModuleList(conv_seqs)
@@ -94,9 +117,20 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
         self.logits_fc = nn.Linear(in_features=256, out_features=num_outputs)
         self.value_fc = nn.Linear(in_features=256, out_features=1)
 
+        self.dropout_fc = nn.Dropout(self.dropout_prob)
+
+        # Set externally during training.
+        self.norm_layers_active = False
+
     @override(TorchModelV2)
     def forward(self, input_dict, state, seq_lens):
         x = input_dict["obs"].float()
+
+        if self._in_rollout(x) or not self.norm_layers_active:
+            self.set_norm_layer_mode("eval")
+        else:
+            self.set_norm_layer_mode("train")
+
         x = x / 255.0  # scale to 0-1
         x = x.permute(0, 3, 1, 2)  # NHWC => NCHW
         for conv_seq in self.conv_seqs:
@@ -105,10 +139,22 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
         x = nn.functional.relu(x)
         x = self.hidden_fc(x)
         x = nn.functional.relu(x)
+        x = self.dropout_fc(x)
         logits = self.logits_fc(x)
         value = self.value_fc(x)
         self._value = value.squeeze(1)
         return logits, state
+
+    def _in_rollout(self, x):
+        return len(x) < 512
+
+    def set_norm_layer_mode(self, mode):
+        if mode == "train":
+            self.dropout_fc.train()
+        else:
+            self.dropout_fc.eval()
+        for conv_seq in self.conv_seqs:
+            conv_seq.set_norm_layer_mode(mode)
 
     @override(TorchModelV2)
     def value_function(self):
