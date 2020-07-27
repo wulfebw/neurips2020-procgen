@@ -22,7 +22,7 @@ run_001_drac:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/wulfebw/experiments/procgen_022
+    # local_dir: /home/wulfebw/experiments/procgen_022
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -60,7 +60,7 @@ run_001_drac:
                 "dt": 2
               },
               "normalize_obs": False,
-              "frame_stack": True,
+              "frame_stack": False,
               "frame_stack_options": {
                 "k": 2
               },
