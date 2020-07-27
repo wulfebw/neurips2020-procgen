@@ -17,6 +17,7 @@ run_001_drac:
     ################################################
     stop:
         timesteps_total: 8000000
+        time_total_s: 7200
 
     ################################################
     # === Settings for Checkpoints ===
@@ -339,7 +340,7 @@ run_001_drac:
         # === Evaluation Settings ===
         ################################################
         ################################################
-        evaluation_interval: 30
-        evaluation_num_episodes: 50
-        evaluation_num_workers: 0
-        evaluation_config: {"env_config": {"num_levels": 0, "env_wrapper_options": {"normalize_reward": False}}}
+        # evaluation_interval: 30
+        # evaluation_num_episodes: 50
+        # evaluation_num_workers: 0
+        # evaluation_config: {"env_config": {"num_levels": 0, "env_wrapper_options": {"normalize_reward": False}}}
