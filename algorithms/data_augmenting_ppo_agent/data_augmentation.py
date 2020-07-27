@@ -1,10 +1,16 @@
 import sys
 
-import matplotlib.pyplot as plt
+try:
+    import matplotlib.pyplot as plt
+except ImportError:
+    plt = None
 import numpy as np
 import torch
 import torch.nn as nn
-import torchvision
+try:
+    import torchvision
+except ImportError:
+    torchvision = None
 
 # from algorithms.data_augmenting_ppo_agent.color_jitter_layer import ColorJitterLayer
 # from color_jitter_layer import ColorJitterLayer
