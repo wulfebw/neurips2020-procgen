@@ -45,8 +45,8 @@ def write_experiments(base, num_iterations, env_names):
             for transforms in [["random_translate"]]:
                 for data_aug_mode in ["drac"]:
                     for lr in [0.0005]:
-                        for weight_decay in [0.001, 0.0001, 0.00001]:
-                            for amsgrad in [False]:
+                        for weight_decay in [0.0]:
+                            for k in [1, 2, 3, 4]:
                                 # This information is common to all the experiments.
                                 base_copy = copy.deepcopy(base)
                                 base_copy["local_dir"] = env_dir
@@ -58,7 +58,7 @@ def write_experiments(base, num_iterations, env_names):
                                 env_wrapper_options = {
                                     "frame_stack": True,
                                     "frame_stack_options": {
-                                        "k": 2
+                                        "k": k
                                     },
                                     "normalize_reward": False
                                 }
@@ -83,7 +83,6 @@ def write_experiments(base, num_iterations, env_names):
                                     "optimizer_options": {
                                         "opt_type": "adamw",
                                         "weight_decay": weight_decay,
-                                        "amsgrad": amsgrad
                                     }
                                 }
                                 base_copy["config"]["model"][
@@ -91,7 +90,7 @@ def write_experiments(base, num_iterations, env_names):
                                 transform_string = "_".join(transforms)
 
                                 exp_name = (f"itr_{iteration}_{env_name}_{data_aug_mode}_"
-                                            f"weight_decay_{weight_decay}")
+                                            f"frame_stack_{k}")
                                 exps[exp_name] = base_copy
 
     os.makedirs(base["local_dir"], exist_ok=True)
