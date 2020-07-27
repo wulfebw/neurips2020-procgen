@@ -105,7 +105,9 @@ def drac_data_augmenting_loss(policy,
 
     train_batch["obs"] = apply_data_augmentation(train_batch["obs"],
                                                  model.data_augmentation_options)
+    model.norm_layers_active = True
     aug_logits, aug_state = model.from_batch(train_batch)
+    model.norm_layers_active = False
     aug_action_dist = dist_class(aug_logits, model)
     aug_value = model.value_function()
 
@@ -162,6 +164,32 @@ DataAugmentingTorchPolicy = build_torch_policy(name="DataAugmentingTorchPolicy",
                                                before_init=setup_config,
                                                after_init=setup_mixins,
                                                mixins=[KLCoeffMixin, ValueNetworkMixin])
+
+
+# Well, this is a bit of a hack, but oh well.
+def get_optimizer(policy):
+    config = policy.model.optimizer_options
+
+    lr = policy.config["lr"]
+    opt_type = config.get("opt_type", "adam")
+
+    if opt_type == "adam":
+        return torch.optim.Adam(policy.model.parameters(), lr=lr)
+    if opt_type == "adamw":
+        return torch.optim.Adam(policy.model.parameters(),
+                                lr=lr,
+                                weight_decay=config.get("weight_decay", 0),
+                                amsgrad=config.get("amsgrad", False))
+    elif opt_type == "sgd":
+        return torch.optim.SGD(policy.model.parameters(),
+                               lr=lr,
+                               momentum=config.get("momentum", 0.9),
+                               nesterov=True)
+    else:
+        raise ValueError(f"Invalid optimizer: {opt_type}")
+
+
+DataAugmentingTorchPolicy.optimizer = get_optimizer
 
 
 def get_policy_class(config):

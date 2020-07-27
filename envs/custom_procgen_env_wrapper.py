@@ -1,5 +1,6 @@
 import copy
 
+from gym.wrappers import TransformReward
 import numpy as np
 from ray.rllib.env.atari_wrappers import FrameStack
 from ray.tune import registry
@@ -26,6 +27,25 @@ PROCGEN_OBS_MEANS = {
     "ninja": np.array([145, 147, 136]),
     "plunder": np.array([74, 119, 158]),
     "starpilot": np.array([46, 48, 43]),
+}
+
+PROCGEN_MAX_RETURN = {
+    "bigfish": 40,
+    "bossfight": 13,
+    "caveflyer": 12,
+    "chaser": 13,
+    "climber": 13,
+    "coinrun": 10,
+    "dodgeball": 19,
+    "fruitbot": 32,
+    "heist": 10,
+    "jumper": 10,
+    "leaper": 10,
+    "maze": 10,
+    "miner": 13,
+    "ninja": 10,
+    "plunder": 30,
+    "starpilot": 64,
 }
 
 
@@ -56,7 +76,8 @@ def wrap_procgen(env,
                  frame_stack=False,
                  frame_stack_options={},
                  frame_stack_phase_correlation=False,
-                 frame_stack_phase_correlation_options={}):
+                 frame_stack_phase_correlation_options={},
+                 normalize_reward=False):
     env_name = env.env_name
     if frame_diff:
         env = FrameDiff(env, **frame_diff_options)
@@ -67,6 +88,10 @@ def wrap_procgen(env,
         env = FrameStack(env, **frame_stack_options)
     if frame_stack_phase_correlation:
         env = FrameStackPhaseCorrelation(env, **frame_stack_phase_correlation_options)
+    if normalize_reward:
+        env_max_return = PROCGEN_MAX_RETURN[env_name]
+        env_reward_scale = 10.0 / env_max_return
+        env = TransformReward(env, lambda r: r * env_reward_scale)
 
     return env
 
