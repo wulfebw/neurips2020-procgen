@@ -1,7 +1,4 @@
-try:
-    import cv2
-except ImportError:
-    cv2 = None
+import cv2
 import gym
 import numpy as np
 
