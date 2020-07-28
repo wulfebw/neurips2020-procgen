@@ -46,7 +46,7 @@ def write_experiments(base, num_iterations, env_names):
                 for data_aug_mode in ["drac"]:
                     for lr in [0.0005]:
                         for weight_decay in [0.0]:
-                            for k in [1, 2, 3, 4]:
+                            for num_filters in [[16, 32, 32, 32], [20, 36, 36], [24, 32, 32]]:
                                 # This information is common to all the experiments.
                                 base_copy = copy.deepcopy(base)
                                 base_copy["local_dir"] = env_dir
@@ -58,7 +58,7 @@ def write_experiments(base, num_iterations, env_names):
                                 env_wrapper_options = {
                                     "frame_stack": True,
                                     "frame_stack_options": {
-                                        "k": k
+                                        "k": 1
                                     },
                                     "normalize_reward": False
                                 }
@@ -67,7 +67,7 @@ def write_experiments(base, num_iterations, env_names):
 
                                 # Random translate versus baseline.
                                 custom_model_options = {
-                                    "num_filters": [16, 32, 32],
+                                    "num_filters": num_filters,
                                     "data_augmentation_options": {
                                         "mode": data_aug_mode,
                                         "mode_options": {
@@ -89,8 +89,9 @@ def write_experiments(base, num_iterations, env_names):
                                     "custom_options"] = custom_model_options
                                 transform_string = "_".join(transforms)
 
+                                num_filters_string = "_".join(str(v) for v in num_filters)
                                 exp_name = (f"itr_{iteration}_{env_name}_{data_aug_mode}_"
-                                            f"frame_stack_{k}")
+                                            f"network_{num_filters_string}")
                                 exps[exp_name] = base_copy
 
     os.makedirs(base["local_dir"], exist_ok=True)
