@@ -3,6 +3,6 @@
     "grader_id": "evaluations-api-neurips-2020-procgen",
     "authors" : ["wulfebw"],
     "description": "Procgen test submission",
-    "docker_build": true,
+    "docker_build": false,
     "debug" : false
 }

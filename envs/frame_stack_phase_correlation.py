@@ -1,9 +1,9 @@
 from collections import deque
 
-import cv2
+# import cv2
 import gym
 import numpy as np
-import scipy.ndimage
+# import scipy.ndimage
 
 
 class FrameStackPhaseCorrelation(gym.Wrapper):
