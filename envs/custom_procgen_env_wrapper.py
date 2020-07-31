@@ -5,6 +5,7 @@ import numpy as np
 from ray.rllib.env.atari_wrappers import FrameStack
 from ray.tune import registry
 
+from envs.action_remapper import ActionRemapper
 from envs.frame_diff import FrameDiff
 from envs.frame_stack_phase_correlation import FrameStackPhaseCorrelation
 from envs.mean_normalize_image_obs import MeanNormalizeImageObs
@@ -48,6 +49,20 @@ PROCGEN_MAX_RETURN = {
     "starpilot": 64,
 }
 
+ENV_RELEVANT_ACTION_INDICES = {
+    "bigfish": [7, 1, 5, 3],
+    "coinrun": [4, 7, 1, 5],
+    "miner": [7, 1, 5, 3],
+}
+
+ALL_ACTION_INDICES = list(range(15))
+
+
+def get_relevant_action_indices(env_name):
+    if env_name not in ENV_RELEVANT_ACTION_INDICES:
+        print(f"Minimal actions not available for {env_name}")
+    return ENV_RELEVANT_ACTION_INDICES.get(env_name, ALL_ACTION_INDICES)
+
 
 def get_obs_mean_for_env(env, dtype=np.uint8):
     assert env in PROCGEN_OBS_MEANS, f"Invalid env name: {env}"
@@ -77,7 +92,8 @@ def wrap_procgen(env,
                  frame_stack_options={},
                  frame_stack_phase_correlation=False,
                  frame_stack_phase_correlation_options={},
-                 normalize_reward=False):
+                 normalize_reward=False,
+                 minimal_action_space=False):
     env_name = env.env_name
     if frame_diff:
         env = FrameDiff(env, **frame_diff_options)
@@ -92,7 +108,9 @@ def wrap_procgen(env,
         env_max_return = PROCGEN_MAX_RETURN[env_name]
         env_reward_scale = 10.0 / env_max_return
         env = TransformReward(env, lambda r: r * env_reward_scale)
-
+    if minimal_action_space:
+        action_map = get_relevant_action_indices(env_name)
+        env = ActionRemapper(env, action_map)
     return env
 
 
