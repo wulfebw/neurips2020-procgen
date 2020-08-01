@@ -1,5 +1,8 @@
 ray[rllib]==0.8.5
 procgen==0.10.1
-tensorflow==2.1.0
+tensorflow==2.2.0
 mlflow==1.8.0
 boto3==1.13.10
+matplotlib==3.3.0
+kornia==0.3.1
+opencv-python==4.2.0.34
