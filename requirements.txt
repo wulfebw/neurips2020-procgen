@@ -6,3 +6,4 @@ boto3==1.13.10
 matplotlib==3.3.0
 kornia==0.3.1
 opencv-python==4.2.0.34
+scipy==1.5.2
