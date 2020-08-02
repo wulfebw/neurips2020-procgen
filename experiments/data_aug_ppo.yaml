@@ -22,7 +22,7 @@ run_001_drac:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/wulfebw/experiments/procgen_022
+    local_dir: /home/wulfebw/experiments/procgen_025
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -222,7 +222,7 @@ run_001_drac:
               "data_augmentation_options": {
                 "mode": "drac",
                 "mode_options": {
-                  "drac": {"drac_weight": 0.2, "drac_value_weight": 1, "drac_policy_weight": 1}
+                  "drac": {"drac_weight": 0.1, "drac_value_weight": 1, "drac_policy_weight": 1}
                 },
                 "transforms": ["random_translate"],
               },
