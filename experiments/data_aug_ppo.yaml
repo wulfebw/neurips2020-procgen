@@ -89,10 +89,10 @@ run_001_drac:
         lr: 5.0e-4
         # Number of SGD iterations in each outer loop (i.e., number of epochs to
         # execute per train batch).
-        num_sgd_iter: 4
+        num_sgd_iter: 2
         # Total SGD batch size across all devices for SGD. This defines the
         # minibatch size within each epoch.
-        sgd_minibatch_size: 1760 # 2048 # 8 minibatches per epoch
+        sgd_minibatch_size: 880 # 2048 # 8 minibatches per epoch
         # Training batch size, if applicable. Should be >= rollout_fragment_length.
         # Samples batches will be concatenated together to a batch of this size,
         # which is then passed to SGD.
@@ -219,7 +219,7 @@ run_001_drac:
             custom_model: custom_impala_cnn_torch
             # Extra options to pass to custom class
             custom_options: {
-              "num_filters": [16, 32, 32],
+              "num_filters": [24, 48, 48],
               "data_augmentation_options": {
                 "mode": "drac",
                 "mode_options": {
