@@ -50,7 +50,7 @@ PROCGEN_MAX_RETURN = {
 }
 
 ENV_RELEVANT_ACTION_INDICES = {
-    "bigfish": [7, 1, 5, 3],
+    "bigfish": [4, 7, 1, 5, 3],
     "coinrun": [4, 7, 1, 5],
     "miner": [7, 1, 5, 3],
 }
@@ -109,8 +109,8 @@ def wrap_procgen(env,
         env_reward_scale = 10.0 / env_max_return
         env = TransformReward(env, lambda r: r * env_reward_scale)
     if minimal_action_space:
-        action_map = get_relevant_action_indices(env_name)
-        env = ActionRemapper(env, action_map)
+        action_indices = get_relevant_action_indices(env_name)
+        env = ActionRemapper(env, action_indices)
     return env
 
 
