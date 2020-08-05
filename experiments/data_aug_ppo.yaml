@@ -67,7 +67,8 @@ run_001_drac:
               "frame_stack_phase_correlation": False,
               "frame_stack_phase_correlation_options": {
                 "phase_correlate": False
-              }
+              },
+              "minimal_action_space": True
             }
 
 
@@ -339,7 +340,7 @@ run_001_drac:
         # === Evaluation Settings ===
         ################################################
         ################################################
-        evaluation_interval: 30
-        evaluation_num_episodes: 50
+        evaluation_interval: 100
+        evaluation_num_episodes: 200
         evaluation_num_workers: 0
         evaluation_config: {"env_config": {"num_levels": 0, "env_wrapper_options": {"normalize_reward": False}}}

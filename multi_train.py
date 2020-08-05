@@ -60,7 +60,8 @@ def write_experiments(base, num_iterations, env_names):
                                     "frame_stack_options": {
                                         "k": 2
                                     },
-                                    "normalize_reward": True
+                                    "normalize_reward": False,
+                                    "minimal_action_space": True
                                 }
                                 base_copy["config"]["env_config"]["env_wrapper_options"].update(
                                     env_wrapper_options)
@@ -72,7 +73,7 @@ def write_experiments(base, num_iterations, env_names):
                                         "mode": data_aug_mode,
                                         "mode_options": {
                                             "drac": {
-                                                "drac_weight": 0.2,
+                                                "drac_weight": 0.1,
                                                 "drac_value_weight": 1,
                                                 "drac_policy_weight": 1
                                             }
@@ -91,7 +92,7 @@ def write_experiments(base, num_iterations, env_names):
                                 transform_string = "_".join(transforms)
 
                                 exp_name = (f"itr_{iteration}_{env_name}_{data_aug_mode}_"
-                                            f"reward_normalize_")
+                                            f"reduced_action_space_no_noop")
                                 exps[exp_name] = base_copy
 
     os.makedirs(base["local_dir"], exist_ok=True)
