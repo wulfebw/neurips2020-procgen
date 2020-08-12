@@ -182,6 +182,30 @@ def random_convolution(imgs):
     return total_out
 
 
+def random_flip(imgs, probability=0.5, flip_axis=1):
+    """
+    Args:
+        flip_axis: If `1` then randomly performs an up/down flip, and `2` is a left/right flip.
+    """
+    assert flip_axis == 1 or flip_axis == 2
+    device = imgs.device
+    b, h, w, c = imgs.shape
+
+    mask = np.random.uniform(size=(b, )) <= probability
+    mask = torch.from_numpy(mask).to(torch.uint8).to(device)
+    mask = mask.reshape(-1, 1).repeat((1, c)).reshape(-1, 1, 1, c)
+
+    return mask * imgs.flip(dims=(flip_axis, )) + (1 - mask) * imgs
+
+
+def random_rotation(imgs, probability=0.5):
+    device = imgs.device
+    b, h, w, c = imgs.shape
+    imgs = random_flip(imgs, probability=probability, flip_axis=1)
+    imgs = random_flip(imgs, probability=probability, flip_axis=2)
+    return imgs
+
+
 def time_function(f, num_iters, *args):
     import time
     start = time.time()
@@ -361,9 +385,39 @@ def random_color_jitter_main():
     time_function(random_color_jitter, num_iters, obs)
 
 
+def random_flip_main():
+    import copy
+
+    num_imgs = 2048
+    height = 64
+    width = 64
+    channels = 6
+    num_iters = 100
+
+    obs = np.zeros((num_imgs, height, width, channels), dtype=np.uint8)
+    # Make flips obvious.
+    obs[:, :16, :16, :] = 255
+    # obs[:, -16:, -16:, :] = 1
+    obs = torch.tensor(obs).to("cuda")
+
+    # result_a = random_flip(copy.deepcopy(obs), flip_axis=2)
+    # result_a = random_rotation(copy.deepcopy(obs))
+
+    # imgs = result_a
+    # import matplotlib.pyplot as plt
+    # for ob, img in zip(obs, imgs):
+    #     fig, axs = plt.subplots(2, 1, figsize=(16, 16))
+    #     axs[0].imshow(ob[:, :, :3].detach().cpu().to(torch.uint8).numpy())
+    #     axs[1].imshow(img[:, :, :3].detach().cpu().to(torch.uint8).numpy())
+    #     plt.show()
+
+    time_function(random_rotation, num_iters, obs)
+
+
 if __name__ == "__main__":
     # random_translate_main()
     # random_cutout_color_main()
     # random_color_jitter_main()
     # random_channel_drop_main()
-    random_conv_main()
+    # random_conv_main()
+    random_flip_main()

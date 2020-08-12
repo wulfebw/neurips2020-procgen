@@ -53,6 +53,7 @@ ENV_RELEVANT_ACTION_INDICES = {
     "bigfish": [4, 7, 1, 5, 3],
     "coinrun": [4, 7, 1, 5],
     "miner": [7, 1, 5, 3],
+    "caveflyer": [4, 7, 1, 5, 3, 9],
 }
 
 ALL_ACTION_INDICES = list(range(15))
