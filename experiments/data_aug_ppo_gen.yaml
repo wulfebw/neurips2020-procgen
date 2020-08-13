@@ -22,7 +22,7 @@ run_001_drac:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/wulfebw/experiments/procgen_026
+    local_dir: /home/wulfebw/experiments/procgen_028
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -340,7 +340,7 @@ run_001_drac:
         # === Evaluation Settings ===
         ################################################
         ################################################
-        evaluation_interval: 100
-        evaluation_num_episodes: 200
+        evaluation_interval: 568 # unfortunate to have to hardcode this, but not sure how better to do it.
+        evaluation_num_episodes: 2000
         evaluation_num_workers: 0
         evaluation_config: {"env_config": {"num_levels": 0, "env_wrapper_options": {"normalize_reward": False}}}
