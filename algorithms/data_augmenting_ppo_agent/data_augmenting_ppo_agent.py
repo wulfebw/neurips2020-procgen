@@ -45,23 +45,21 @@ def sort_transforms(ts):
 
 def apply_transform(imgs, transform, options):
     if transform == "random_translate":
-        imgs = random_translate_via_index(imgs, **options.get("random_translate_options", {}))
+        return random_translate_via_index(imgs, **options.get("random_translate_options", {}))
     elif transform == "random_cutout_color":
-        imgs = random_cutout_color_fast(imgs, **options.get("random_cutout_color_options", {}))
+        return random_cutout_color_fast(imgs, **options.get("random_cutout_color_options", {}))
     elif transform == "random_cutout":
-        imgs = random_cutout(imgs, **options.get("random_cutout_options", {}))
+        return random_cutout(imgs, **options.get("random_cutout_options", {}))
     elif transform == "random_channel_drop":
-        imgs = random_channel_drop(imgs, **options.get("random_channel_drop_options", {}))
+        return random_channel_drop(imgs, **options.get("random_channel_drop_options", {}))
     elif transform == "random_flip_up_down":
-        imgs = random_flip(imgs, flip_axis=1, **options.get("random_flip_options", {}))
+        return random_flip(imgs, flip_axis=1, **options.get("random_flip_options", {}))
     elif transform == "random_flip_left_right":
-        imgs = random_flip(imgs, flip_axis=2, **options.get("random_flip_options", {}))
+        return random_flip(imgs, flip_axis=2, **options.get("random_flip_options", {}))
     elif transform == "random_rotation":
-        imgs = random_rotation(imgs, **options.get("random_rotation_options", {}))
+        return random_rotation(imgs, **options.get("random_rotation_options", {}))
     else:
         raise NotImplementedError(f"Transform not implemented {transform}")
-
-    return imgs
 
 
 def apply_data_augmentation_independently(imgs, options):
@@ -71,22 +69,42 @@ def apply_data_augmentation_independently(imgs, options):
     assert num_samples > num_transforms
     num_samples_per_transform = num_samples // num_transforms
     transform_indices = np.random.permutation(num_transforms)
-
+    applied_transforms = [None] * num_samples
     for i, transform_index in enumerate(transform_indices):
         transform = options["transforms"][transform_index]
         start = i * num_samples_per_transform
         end = start + num_samples_per_transform
         if i == num_transforms - 1:
             end = num_samples
-        imgs[start:end] = apply_transform(imgs[start:end], transform, options)
-    return imgs
+        result = apply_transform(imgs[start:end], transform, options)
+        if isinstance(result, tuple):
+            assert len(result) == 2
+            imgs[start:end], applied = result
+            for i, sample_applied in enumerate(applied):
+                if sample_applied:
+                    applied_transforms[start + i] = transform
+        else:
+            imgs[start:end] = result
+
+    return imgs, applied_transforms
 
 
 def apply_data_augmentation_stacked(imgs, options):
     assert len(options["transforms"]) > 0
+    applied_transforms = [None] * len(imgs)
     for transform in sort_transforms(options["transforms"]):
-        imgs = apply_transform(imgs, transform, options)
-    return imgs
+        result = apply_transform(imgs, transform, options)
+        if isinstance(result, tuple):
+            assert len(result) == 2
+            imgs, applied = result
+            for i, sample_applied in enumerate(applied):
+                if sample_applied:
+                    # Assume only one returns true from the set by overwriting.
+                    applied_transforms[i] = transform
+        else:
+            imgs = results
+
+    return imgs, applied_transforms
 
 
 def apply_data_augmentation(imgs, options):
@@ -129,13 +147,28 @@ def compute_ppo_loss(policy, dist_class, model, train_batch, action_dist, state)
     return policy.loss_obj.loss
 
 
+def reorder_logits(logits, applied_transforms):
+    # Not sure how I would generalize this; let's just see if it works first.
+    # For fruitbot, flipping left / right means what?
+    # Flipping original indices 1 and 7, which means reduced indices 1 and 3.
+    flipped_indices = [
+        i for (i, applied_transform) in enumerate(applied_transforms)
+        if applied_transform == "random_flip_left_right"
+    ]
+    flipped_logits = logits.clone()
+    flipped_logits[flipped_indices, 1] = logits[flipped_indices, 3]
+    flipped_logits[flipped_indices, 3] = logits[flipped_indices, 1]
+    return flipped_logits
+
+
 def drac_data_augmenting_loss(policy,
                               model,
                               dist_class,
                               train_batch,
                               drac_weight,
                               drac_value_weight=1,
-                              drac_policy_weight=1):
+                              drac_policy_weight=1,
+                              should_reorder_logits=False):
     assert len(model.data_augmentation_options["transforms"]) > 0
 
     no_aug_logits, no_aug_state = model.from_batch(train_batch)
@@ -146,11 +179,15 @@ def drac_data_augmenting_loss(policy,
     policy_loss = compute_ppo_loss(policy, dist_class, model, train_batch, no_aug_action_dist,
                                    no_aug_state)
 
-    train_batch["obs"] = apply_data_augmentation(train_batch["obs"],
-                                                 model.data_augmentation_options)
+    train_batch["obs"], applied_transforms = apply_data_augmentation(
+        train_batch["obs"], model.data_augmentation_options)
     model.norm_layers_active = True
     aug_logits, aug_state = model.from_batch(train_batch)
     model.norm_layers_active = False
+
+    if should_reorder_logits:
+        aug_logits = reorder_logits(aug_logits, applied_transforms)
+
     aug_action_dist = dist_class(aug_logits, model)
     aug_value = model.value_function()
 

@@ -191,11 +191,11 @@ def random_flip(imgs, probability=0.5, flip_axis=1):
     device = imgs.device
     b, h, w, c = imgs.shape
 
-    mask = np.random.uniform(size=(b, )) <= probability
-    mask = torch.from_numpy(mask).to(torch.uint8).to(device)
+    numpy_mask = np.random.uniform(size=(b, )) <= probability
+    mask = torch.from_numpy(numpy_mask).to(torch.uint8).to(device)
     mask = mask.reshape(-1, 1).repeat((1, c)).reshape(-1, 1, 1, c)
 
-    return mask * imgs.flip(dims=(flip_axis, )) + (1 - mask) * imgs
+    return mask * imgs.flip(dims=(flip_axis, )) + (1 - mask) * imgs, numpy_mask
 
 
 def random_rotation(imgs, probability=0.5):
