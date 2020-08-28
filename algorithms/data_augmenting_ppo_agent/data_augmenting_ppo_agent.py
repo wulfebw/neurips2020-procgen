@@ -18,13 +18,53 @@ from ray.rllib.utils.torch_ops import sequence_mask
 
 torch, nn = try_import_torch()
 
-from algorithms.data_augmenting_ppo_agent.data_augmentation import (random_translate_via_index,
-                                                                    random_cutout_color_fast,
-                                                                    random_cutout,
-                                                                    random_channel_drop)
+from algorithms.data_augmenting_ppo_agent.data_augmentation import (
+    random_translate_via_index,
+    random_cutout_color_fast,
+    random_cutout,
+    random_channel_drop,
+    random_rotation,
+    random_flip,
+)
+
+PRIORITY_ORDERED_TRANSFORMS = [
+    "random_rotation",
+    "random_flip_left_right",
+    "random_flip_up_down",
+    "random_cutout",
+    "random_cutout_color",
+    "random_channel_drop",
+    "random_conv",
+    "random_translate",
+]
 
 
-def apply_data_augmentation(imgs, options):
+def sort_transforms(ts):
+    return sorted(ts, key=lambda x: PRIORITY_ORDERED_TRANSFORMS.index(x))
+
+
+def apply_transform(imgs, transform, options):
+    if transform == "random_translate":
+        imgs = random_translate_via_index(imgs, **options.get("random_translate_options", {}))
+    elif transform == "random_cutout_color":
+        imgs = random_cutout_color_fast(imgs, **options.get("random_cutout_color_options", {}))
+    elif transform == "random_cutout":
+        imgs = random_cutout(imgs, **options.get("random_cutout_options", {}))
+    elif transform == "random_channel_drop":
+        imgs = random_channel_drop(imgs, **options.get("random_channel_drop_options", {}))
+    elif transform == "random_flip_up_down":
+        imgs = random_flip(imgs, flip_axis=1, **options.get("random_flip_options", {}))
+    elif transform == "random_flip_left_right":
+        imgs = random_flip(imgs, flip_axis=2, **options.get("random_flip_options", {}))
+    elif transform == "random_rotation":
+        imgs = random_rotation(imgs, **options.get("random_rotation_options", {}))
+    else:
+        raise NotImplementedError(f"Transform not implemented {transform}")
+
+    return imgs
+
+
+def apply_data_augmentation_independently(imgs, options):
     num_transforms = len(options["transforms"])
     assert num_transforms > 0
     num_samples = len(imgs)
@@ -38,22 +78,25 @@ def apply_data_augmentation(imgs, options):
         end = start + num_samples_per_transform
         if i == num_transforms - 1:
             end = num_samples
-        if transform == "random_translate":
-            imgs[start:end] = random_translate_via_index(
-                imgs[start:end], **options.get("random_translate_options", {}))
-        elif transform == "random_cutout_color":
-            imgs[start:end] = random_cutout_color_fast(
-                imgs[start:end], **options.get("random_cutout_color_options", {}))
-        elif transform == "random_cutout":
-            imgs[start:end] = random_cutout(imgs[start:end],
-                                            **options.get("random_cutout_options", {}))
-        elif transform == "random_channel_drop":
-            imgs[start:end] = random_channel_drop(imgs[start:end],
-                                                  **options.get("random_channel_drop_options", {}))
-        else:
-            raise NotImplementedError(f"Transform not implemented {transform}")
-
+        imgs[start:end] = apply_transform(imgs[start:end], transform, options)
     return imgs
+
+
+def apply_data_augmentation_stacked(imgs, options):
+    assert len(options["transforms"]) > 0
+    for transform in sort_transforms(options["transforms"]):
+        imgs = apply_transform(imgs, transform, options)
+    return imgs
+
+
+def apply_data_augmentation(imgs, options):
+    aug_mode = options.get("augmentation_mode", "independent")
+    if aug_mode == "independent":
+        return apply_data_augmentation_independently(imgs, options)
+    elif aug_mode == "stacked":
+        return apply_data_augmentation_stacked(imgs, options)
+    else:
+        raise ValueError(f"Invalid augmentation mode: {aug_mode}")
 
 
 def compute_ppo_loss(policy, dist_class, model, train_batch, action_dist, state):

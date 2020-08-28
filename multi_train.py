@@ -42,11 +42,17 @@ def write_experiments(base, num_iterations, env_names):
             base_copy["local_dir"] = env_dir
             base_copy["config"]["env_config"]["env_name"] = env_name
 
-            for transforms in [["random_translate"]]:
+            for transforms in [
+                ["random_translate", "random_flip_left_right"],
+                ["random_flip_left_right"],
+                ["random_translate"],
+            ]:
                 for data_aug_mode in ["drac"]:
+                    if len(transforms) == 0:
+                        data_aug_mode = "none"
                     for lr in [0.0005]:
                         for weight_decay in [0.0]:
-                            for amsgrad in [False]:
+                            for drac_policy_weight in [0, 1]:
                                 # This information is common to all the experiments.
                                 base_copy = copy.deepcopy(base)
                                 base_copy["local_dir"] = env_dir
@@ -71,11 +77,12 @@ def write_experiments(base, num_iterations, env_names):
                                     "num_filters": [16, 32, 32],
                                     "data_augmentation_options": {
                                         "mode": data_aug_mode,
+                                        "augmentation_mode": "stacked",
                                         "mode_options": {
                                             "drac": {
                                                 "drac_weight": 0.1,
                                                 "drac_value_weight": 1,
-                                                "drac_policy_weight": 1
+                                                "drac_policy_weight": drac_policy_weight,
                                             }
                                         },
                                         "transforms": transforms,
@@ -84,15 +91,16 @@ def write_experiments(base, num_iterations, env_names):
                                     "optimizer_options": {
                                         "opt_type": "adam",
                                         "weight_decay": weight_decay,
-                                        "amsgrad": amsgrad
                                     }
                                 }
                                 base_copy["config"]["model"][
                                     "custom_options"] = custom_model_options
                                 transform_string = "_".join(transforms)
 
-                                exp_name = (f"itr_{iteration}_{env_name}_{data_aug_mode}_"
-                                            f"reduced_action_space_no_noop")
+                                exp_name = (
+                                    f"itr_{iteration}_{env_name}_{data_aug_mode}_"
+                                    f"drac_policy_weight_{drac_policy_weight}_transforms_{transform_string}"
+                                )
                                 exps[exp_name] = base_copy
 
     os.makedirs(base["local_dir"], exist_ok=True)
