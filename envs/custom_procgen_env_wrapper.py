@@ -50,11 +50,22 @@ PROCGEN_MAX_RETURN = {
 }
 
 ENV_RELEVANT_ACTION_INDICES = {
-    "bigfish": [4, 7, 1, 5, 3],
-    "coinrun": [4, 7, 1, 5],
+    "bigfish": [4, 7, 1, 5, 3, 8, 0, 2, 6],
+    "bossfight": [4, 7, 1, 5, 3, 9, 8, 0, 2, 6],
+    "caveflyer": [4, 7, 1, 5, 3, 9, 8, 0, 2, 6],
+    "chaser": [4, 7, 1, 5, 3],
+    "climber": [4, 7, 1, 5, 8, 0, 2, 6],
+    "coinrun": [4, 7, 1, 5, 8, 0, 2, 6],
+    "dodgeball": [4, 7, 1, 5, 3, 9, 8, 0, 2, 6],
+    "fruitbot": [9, 7, 4, 1],
+    "heist": [7, 1, 5, 3, 8, 0, 2, 6],
+    "jumper": [7, 1, 5, 3, 4, 8, 0, 2, 6],
+    "leaper": [7, 1, 5, 3, 4, 8, 0, 2, 6],
+    "maze": [7, 1, 5, 3],
     "miner": [7, 1, 5, 3],
-    "caveflyer": [4, 7, 1, 5, 3, 9],
-    "fruitbot": [9, 7, 4, 1]
+    "ninja": [7, 1, 5, 3, 4, 9, 8, 0, 2, 6],
+    "plunder": [7, 1, 4, 9],
+    "starpilot": [7, 1, 5, 3, 4, 9, 8, 0, 2, 6],
 }
 
 ALL_ACTION_INDICES = list(range(15))
