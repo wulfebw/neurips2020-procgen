@@ -38,10 +38,16 @@ def _import_data_augmenting_ppo_agent():
     return DataAugmentingPPOTrainer
 
 
+def _import_drac_ppo_agent():
+    from .data_augmenting_ppo_agent.drac_ppo_agent import DRACPPOTrainer
+    return DRACPPOTrainer
+
+
 CUSTOM_ALGORITHMS = {
     "custom/CustomRandomAgent": _import_custom_random_agent,
     "custom/MONetTrainer": _import_monet_agent,
     "custom/EpisodeAdversarialTrainer": _import_episode_adversarial_agent,
     "custom/DataAugmentingPPOTrainer": _import_data_augmenting_ppo_agent,
+    "custom/DRACPPOTrainer": _import_drac_ppo_agent,
     "RandomPolicy": _import_random_policy,
 }

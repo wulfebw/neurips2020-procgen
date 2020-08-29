@@ -94,7 +94,8 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
                  num_filters=[16, 32, 32],
                  data_augmentation_options={},
                  dropout_prob=0.0,
-                 optimizer_options={}):
+                 optimizer_options={},
+                 auto_drac_options={}):
         TorchModelV2.__init__(self, obs_space, action_space, num_outputs, model_config, name)
         nn.Module.__init__(self)
 
