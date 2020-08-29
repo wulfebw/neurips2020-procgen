@@ -17,12 +17,13 @@ run_001_drac:
     ################################################
     stop:
         timesteps_total: 8000000
+        time_total_s: 7200
 
     ################################################
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/wulfebw/experiments/procgen_025
+    # local_dir: /home/wulfebw/experiments/procgen_025
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -68,7 +69,7 @@ run_001_drac:
               "frame_stack_phase_correlation_options": {
                 "phase_correlate": False
               },
-              "minimal_action_space": True
+              "minimal_action_space": False
             }
 
 
@@ -219,7 +220,7 @@ run_001_drac:
             custom_model: custom_impala_cnn_torch
             # Extra options to pass to custom class
             custom_options: {
-              "num_filters": [16, 32, 32],
+              "num_filters": [24, 48, 48],
               "data_augmentation_options": {
                 "mode": "drac",
                 "mode_options": {
@@ -340,7 +341,7 @@ run_001_drac:
         # === Evaluation Settings ===
         ################################################
         ################################################
-        evaluation_interval: 100
-        evaluation_num_episodes: 200
-        evaluation_num_workers: 0
-        evaluation_config: {"env_config": {"num_levels": 0, "env_wrapper_options": {"normalize_reward": False}}}
+        # evaluation_interval: 100
+        # evaluation_num_episodes: 200
+        # evaluation_num_workers: 0
+        # evaluation_config: {"env_config": {"num_levels": 0, "env_wrapper_options": {"normalize_reward": False}}}
