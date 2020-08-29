@@ -67,7 +67,6 @@ def write_experiments(base, num_iterations, env_names):
                                         "k": 2
                                     },
                                     "normalize_reward": False,
-                                    "minimal_action_space": True
                                 }
                                 base_copy["config"]["env_config"]["env_wrapper_options"].update(
                                     env_wrapper_options)
