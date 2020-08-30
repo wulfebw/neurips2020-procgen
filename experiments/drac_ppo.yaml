@@ -241,14 +241,14 @@ run_001_drac:
                 "action_value_update_rate": 0.001,
                 "mode_to_ucb_c": {
                   "mean_reward_advantage": 0.001,
-                  "mean_reward": 0.001,
-                  "sum_reward": 0.1,
+                  "mean_reward": 0.004,
+                  "sum_reward": 2.0,
                 },
                 # If this were (train_batch_size / minibatch_size) * num_epochs, it would
                 # update the action every set of updates. That seems too frequent given
                 # the rollouts, so take a multiple of it.
-                "sample_action_every_num_updates": 128,
-                "action_value_mode": "sum_reward",
+                "sample_action_every_num_updates": 32,
+                "action_value_mode": "mean_reward_advantage",
               },
               "dropout_prob": 0.05,
               "optimizer_options": {

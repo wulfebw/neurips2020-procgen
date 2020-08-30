@@ -35,7 +35,10 @@ def drac_init(policy, observation_space, action_space, options):
     policy.sample_action_every_num_updates = drac_options["sample_action_every_num_updates"]
 
     policy.action_counts = {t: 0 for t in policy.choose_between_transforms}
-    policy.action_values = {t: 0 for t in policy.choose_between_transforms}
+    policy.action_values = {
+        t: collections.deque(maxlen=policy.sample_action_every_num_updates * 10)
+        for t in policy.choose_between_transforms
+    }
     # Having two values allows for a better estimate of the action values (based
     # on the mean reward prior to the current set of minibatches.
     policy.prev_mean_reward = 0
@@ -70,17 +73,25 @@ def drac_loss_fn(policy, model, dist_class, train_batch):
         raise NotImplementedError(f"Action value mode not implemented: {policy.action_value_mode}")
 
     if policy.prev_action is not None:
-        policy.action_values[policy.prev_action] = (
-            policy.action_value_update_rate * action_value +
-            (1 - policy.action_value_update_rate) * policy.action_values[policy.prev_action])
+        policy.action_values[policy.prev_action].append(action_value)
+        # policy.action_values[policy.prev_action] = (
+        #     policy.action_value_update_rate * action_value +
+        #     (1 - policy.action_value_update_rate) * policy.action_values[policy.prev_action])
 
     # Decide whether this is the first minibatch in a given set of updates.
     # If so update the options with a newly-selected set of transforms.
     if (policy.num_minibatches - 1) % policy.sample_action_every_num_updates == 0:
+        action_values = {}
+        for (k, v) in policy.action_values.items():
+            if len(v) > 0:
+                action_values[k] = np.mean(v)
+            else:
+                action_values[k] = 0
+
         print(f"drac_loss_fn, policy.num_minibatches: {policy.num_minibatches}")
         print(f"policy.ucb_timestep: {policy.ucb_timestep}")
         print(f"cur_mean_reward: {cur_mean_reward}")
-        print(f"policy.action_values: {policy.action_values}")
+        print(f"policy.action_values: {action_values}")
         print(f"policy.prev_mean_reward: {policy.prev_mean_reward}")
         print(f"policy.next_mean_reward: {policy.next_mean_reward}")
 
@@ -90,7 +101,7 @@ def drac_loss_fn(policy, model, dist_class, train_batch):
         best_score = -np.inf
         best_transform = None
         for transform in policy.choose_between_transforms:
-            score = (policy.action_values[transform] + policy.ucb_c *
+            score = (action_values[transform] + policy.ucb_c *
                      (np.log(policy.ucb_timestep) / (policy.action_counts[transform] + 1e-8))**0.5)
             print(f"transform: {transform}, score: {score}")
             if score > best_score:
@@ -137,7 +148,7 @@ def drac_stats_fn(policy, train_batch):
     stats = kl_and_loss_stats(policy, train_batch)
     drac_stats = {}
     drac_stats.update({f"drac_{k}_count": v for (k, v) in policy.action_counts.items()})
-    drac_stats.update({f"drac_{k}_value": v for (k, v) in policy.action_values.items()})
+    drac_stats.update({f"drac_{k}_value": np.mean(v) for (k, v) in policy.action_values.items()})
     drac_stats["drac_mean_reward"] = policy.prev_mean_reward
     stats.update(drac_stats)
     return stats
