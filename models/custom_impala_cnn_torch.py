@@ -102,6 +102,7 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
         # This is a hack to make custom options accessible to the policy.
         # It must be stored on this class.
         self.data_augmentation_options = data_augmentation_options
+        self.auto_drac_options = auto_drac_options
         self.dropout_prob = dropout_prob
         self.optimizer_options = optimizer_options
 
