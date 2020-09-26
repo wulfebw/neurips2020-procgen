@@ -182,7 +182,7 @@ def random_convolution(imgs):
     return total_out
 
 
-def random_flip(imgs, probability=0.5, flip_axis=1):
+def random_flip(imgs, probability=1.0, flip_axis=1):
     """
     Args:
         flip_axis: If `1` then randomly performs an up/down flip, and `2` is a left/right flip.

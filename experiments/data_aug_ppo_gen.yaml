@@ -22,7 +22,7 @@ run_001_drac:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/wulfebw/experiments/procgen_026
+    local_dir: /home/wulfebw/experiments/procgen_030
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -36,7 +36,7 @@ run_001_drac:
         ################################################
         env_config:
             # Name of the procgen environment to train on # Note, that this parameter will be overriden during the evaluation by the AIcrowd evaluators.
-            env_name: coinrun # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
+            env_name: bigfish # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
             # The number of unique levels that can be generated. Set to 0 to use unlimited levels
             num_levels: 200
             # The lowest seed that will be used to generated levels. 'start_level' and 'num_levels' fully specify the set of possible levels
@@ -59,7 +59,6 @@ run_001_drac:
                 "grayscale": False,
                 "dt": 2
               },
-              "normalize_obs": False,
               "frame_stack": True,
               "frame_stack_options": {
                 "k": 2
@@ -68,7 +67,6 @@ run_001_drac:
               "frame_stack_phase_correlation_options": {
                 "phase_correlate": False
               },
-              "minimal_action_space": True
             }
 
 
