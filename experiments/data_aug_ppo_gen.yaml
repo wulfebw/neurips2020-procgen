@@ -67,6 +67,7 @@ run_001_drac:
               "frame_stack_phase_correlation_options": {
                 "phase_correlate": False
               },
+              "grayscale": False,
             }
 
 
