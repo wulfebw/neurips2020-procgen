@@ -93,14 +93,16 @@ def write_experiments(base, num_iterations, env_names):
                                     "optimizer_options": {
                                         "opt_type": "adam",
                                         "weight_decay": weight_decay,
-                                    }
+                                    },
+                                    "prev_action_mode": "concat"
                                 }
                                 base_copy["config"]["model"][
                                     "custom_options"] = custom_model_options
                                 transform_string = "_".join(transforms)
 
-                                exp_name = (f"itr_{iteration}_{env_name}_{data_aug_mode}_"
-                                            f"transforms_{transform_string}_concat_action")
+                                exp_name = (
+                                    f"itr_{iteration}_{env_name}_{data_aug_mode}_"
+                                    f"transforms_{transform_string}_concat_action_002")
                                 exps[exp_name] = base_copy
 
     os.makedirs(base["local_dir"], exist_ok=True)
