@@ -16,7 +16,7 @@ run_001_drac:
     # === Stop Conditions ===
     ################################################
     stop:
-        timesteps_total: 8000000
+        timesteps_total: 6000000
 
     ################################################
     # === Settings for Checkpoints ===
@@ -59,7 +59,7 @@ run_001_drac:
                 "grayscale": False,
                 "dt": 2
               },
-              "frame_stack": False,
+              "frame_stack": True,
               "frame_stack_options": {
                 "k": 2
               },
@@ -68,7 +68,7 @@ run_001_drac:
                 "phase_correlate": False
               },
               "grayscale": False,
-              "mixed_grayscale_color": True,
+              "mixed_grayscale_color": False,
               "mixed_grayscale_color_options": {
                 "num_prev_frames": 1
               }
@@ -234,7 +234,8 @@ run_001_drac:
               "optimizer_options": {
                 "opt_type": "adam",
                 "momentum": 0.9
-              }
+              },
+              "prev_action_mode": "concat"
             }
 
         ################################################
@@ -343,7 +344,7 @@ run_001_drac:
         # === Evaluation Settings ===
         ################################################
         ################################################
-        evaluation_interval: 568 # unfortunate to have to hardcode this, but not sure how better to do it.
+        evaluation_interval: 425 # 568 # unfortunate to have to hardcode this, but not sure how better to do it.
         evaluation_num_episodes: 2000
         evaluation_num_workers: 0
         evaluation_config: {"env_config": {"num_levels": 0, "env_wrapper_options": {"normalize_reward": False}}}
