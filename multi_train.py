@@ -60,12 +60,16 @@ def write_experiments(base, num_iterations, env_names):
 
                                 # Env options.
                                 env_wrapper_options = {
-                                    "frame_stack": True,
+                                    "frame_stack": False,
                                     "frame_stack_options": {
                                         "k": 2
                                     },
                                     "normalize_reward": False,
-                                    "grayscale": True,
+                                    "grayscale": False,
+                                    "mixed_grayscale_color": True,
+                                    "mixed_grayscale_color_options": {
+                                        "num_prev_frames": 1
+                                    }
                                 }
                                 base_copy["config"]["env_config"]["env_wrapper_options"].update(
                                     env_wrapper_options)
@@ -96,7 +100,7 @@ def write_experiments(base, num_iterations, env_names):
                                 transform_string = "_".join(transforms)
 
                                 exp_name = (f"itr_{iteration}_{env_name}_{data_aug_mode}_"
-                                            f"transforms_{transform_string}_grayscale_all")
+                                            f"transforms_{transform_string}_mixed_grayscale")
                                 exps[exp_name] = base_copy
 
     os.makedirs(base["local_dir"], exist_ok=True)

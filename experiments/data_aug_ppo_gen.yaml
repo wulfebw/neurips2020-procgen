@@ -59,7 +59,7 @@ run_001_drac:
                 "grayscale": False,
                 "dt": 2
               },
-              "frame_stack": True,
+              "frame_stack": False,
               "frame_stack_options": {
                 "k": 2
               },
@@ -68,6 +68,10 @@ run_001_drac:
                 "phase_correlate": False
               },
               "grayscale": False,
+              "mixed_grayscale_color": True,
+              "mixed_grayscale_color_options": {
+                "num_prev_frames": 1
+              }
             }
 
 

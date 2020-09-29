@@ -24,7 +24,7 @@ class Grayscale(gym.ObservationWrapper):
 
 if __name__ == "__main__":
     import sys
-    env = gym.make("procgen:procgen-plunder-v0")
+    env = gym.make("procgen:procgen-fruitbot-v0")
     env = Grayscale(env)
     x = env.reset()
     env.plot(x, f"/home/wulfebw/Desktop/scratch/gray_test_0.png")
