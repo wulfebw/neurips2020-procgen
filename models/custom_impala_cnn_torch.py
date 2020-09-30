@@ -1,4 +1,5 @@
 import kornia
+import numpy as np
 from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
 from ray.rllib.models import ModelCatalog
 from ray.rllib.utils.annotations import override
@@ -94,7 +95,8 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
                  num_filters=[16, 32, 32],
                  data_augmentation_options={},
                  dropout_prob=0.0,
-                 optimizer_options={}):
+                 optimizer_options={},
+                 prev_action_mode="none"):
         TorchModelV2.__init__(self, obs_space, action_space, num_outputs, model_config, name)
         nn.Module.__init__(self)
 
@@ -103,6 +105,7 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
         self.data_augmentation_options = data_augmentation_options
         self.dropout_prob = dropout_prob
         self.optimizer_options = optimizer_options
+        self.prev_action_mode = prev_action_mode
 
         h, w, c = obs_space.shape
         shape = (c, h, w)
@@ -113,9 +116,18 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
             shape = conv_seq.get_output_shape()
             conv_seqs.append(conv_seq)
         self.conv_seqs = nn.ModuleList(conv_seqs)
-        self.hidden_fc = nn.Linear(in_features=shape[0] * shape[1] * shape[2], out_features=256)
-        self.logits_fc = nn.Linear(in_features=256, out_features=num_outputs)
-        self.value_fc = nn.Linear(in_features=256, out_features=1)
+
+        hidden_fc_shape_in = shape[0] * shape[1] * shape[2]
+        logits_fc_shape_in = 256
+        value_fc_shape_in = 256
+        if prev_action_mode == "concat":
+            hidden_fc_shape_in = shape[0] * shape[1] * shape[2] + self.action_space.n
+            logits_fc_shape_in = logits_fc_shape_in + self.action_space.n
+            value_fc_shape_in = value_fc_shape_in + self.action_space.n
+
+        self.hidden_fc = nn.Linear(in_features=hidden_fc_shape_in, out_features=256)
+        self.logits_fc = nn.Linear(in_features=logits_fc_shape_in, out_features=num_outputs)
+        self.value_fc = nn.Linear(in_features=value_fc_shape_in, out_features=1)
 
         self.dropout_fc = nn.Dropout(self.dropout_prob)
 
@@ -137,9 +149,21 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
             x = conv_seq(x)
         x = torch.flatten(x, start_dim=1)
         x = nn.functional.relu(x)
+
+        if self.prev_action_mode == "concat":
+            a = input_dict["prev_actions"]
+            if isinstance(a, list):
+                a = torch.tensor(np.asarray(a)).squeeze()
+            a = torch.nn.functional.one_hot(a, self.action_space.n).to(x.device).to(torch.float32)
+            x = torch.cat((x, a), axis=-1)
+
         x = self.hidden_fc(x)
         x = nn.functional.relu(x)
         x = self.dropout_fc(x)
+
+        if self.prev_action_mode == "concat":
+            x = torch.cat((x, a), axis=-1)
+
         logits = self.logits_fc(x)
         value = self.value_fc(x)
         self._value = value.squeeze(1)
