@@ -1,3 +1,5 @@
+import collections
+
 import numpy as np
 
 import ray
@@ -208,8 +210,67 @@ def data_augmenting_loss(policy, model, dist_class, train_batch):
 
 def data_augmenting_stats(policy, train_batch):
     stats = kl_and_loss_stats(policy, train_batch)
-    # stats.update(policy.model.metrics())
     return stats
+
+
+def apply_noop_penalty(sample_batch, options):
+    """Detects and penalizes noop transitions.
+
+    Accomplishes this in a simple manner. It checks for identical, consecutive
+    observations, and if they exist then it applies a penalty.
+    """
+    assert "reward" in options
+    reward_value = options["reward"]
+    cur_obs = sample_batch[SampleBatch.CUR_OBS]
+    next_obs = sample_batch[SampleBatch.NEXT_OBS]
+    dones = sample_batch[SampleBatch.DONES]
+
+    diffs = (cur_obs[..., -3:] - next_obs[..., -3:]).sum(axis=(1, 2, 3))
+    noop_timesteps = diffs == 0
+    reward = noop_timesteps * reward_value
+    # Don't apply the reward on a terminal timestep.
+    reward = reward * (1 - dones)
+    sample_batch[SampleBatch.REWARDS] += reward
+
+    debugging = False
+    if debugging:
+        print(reward)
+        print("len obs ", len(cur_obs))
+        actions = sample_batch[SampleBatch.ACTIONS]
+        print("actions ", actions)
+        print("dones ", dones)
+        filepath = "/home/wulfebw/Desktop/scratch/obs.png"
+        import matplotlib.pyplot as plt
+        num_timesteps = min(2, len(actions))
+        fig, axs = plt.subplots(num_timesteps * 2, 2, figsize=(12, 8))
+        # for i, t in enumerate(range(len(cur_obs) - 1, len(cur_obs) - num_timesteps, -1)):
+        for i, t in enumerate(range(num_timesteps)):
+            index = i * 2
+            action = actions[t]
+            axs[index][0].set_title(f"t: {t} action: {action} cur :3")
+            axs[index][0].imshow(cur_obs[t, :, :, :3])
+            axs[index][1].set_title(f"t: {t} action: {action}  cur -3:")
+            axs[index][1].imshow(cur_obs[t, :, :, -3:])
+            axs[index + 1][0].set_title(f"t: {t} action: {action}  next :3")
+            axs[index + 1][0].imshow(next_obs[t, :, :, :3])
+            axs[index + 1][1].set_title(f"t: {t} action: {action}  next -3:")
+            axs[index + 1][1].imshow(next_obs[t, :, :, -3:])
+        plt.tight_layout
+        plt.savefig(filepath)
+        plt.close()
+        import ipdb
+        ipdb.set_trace()
+
+    return sample_batch
+
+
+def intrinsic_reward_postprocess_fn(policy, sample_batch, other_agent_batches=None, episode=None):
+    opt = policy.model.intrinsic_reward_options
+    if opt.get("use_noop_penalty", False):
+        assert "noop_penalty_options" in opt
+        sample_batch = apply_noop_penalty(sample_batch, opt["noop_penalty_options"])
+
+    return postprocess_ppo_gae(policy, sample_batch, other_agent_batches, episode)
 
 
 DataAugmentingTorchPolicy = build_torch_policy(name="DataAugmentingTorchPolicy",
@@ -217,7 +278,7 @@ DataAugmentingTorchPolicy = build_torch_policy(name="DataAugmentingTorchPolicy",
                                                loss_fn=data_augmenting_loss,
                                                stats_fn=data_augmenting_stats,
                                                extra_action_out_fn=vf_preds_fetches,
-                                               postprocess_fn=postprocess_ppo_gae,
+                                               postprocess_fn=intrinsic_reward_postprocess_fn,
                                                extra_grad_process_fn=apply_grad_clipping,
                                                before_init=setup_config,
                                                after_init=setup_mixins,

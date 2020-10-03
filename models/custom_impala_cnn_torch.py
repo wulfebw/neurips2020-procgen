@@ -96,15 +96,19 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
                  data_augmentation_options={},
                  dropout_prob=0.0,
                  optimizer_options={},
-                 prev_action_mode="none"):
+                 prev_action_mode="none",
+                 intrinsic_reward_options={}):
         TorchModelV2.__init__(self, obs_space, action_space, num_outputs, model_config, name)
         nn.Module.__init__(self)
 
         # This is a hack to make custom options accessible to the policy.
         # It must be stored on this class.
         self.data_augmentation_options = data_augmentation_options
-        self.dropout_prob = dropout_prob
         self.optimizer_options = optimizer_options
+        self.intrinsic_reward_options = intrinsic_reward_options
+
+        # These are actual model options.
+        self.dropout_prob = dropout_prob
         self.prev_action_mode = prev_action_mode
 
         h, w, c = obs_space.shape
