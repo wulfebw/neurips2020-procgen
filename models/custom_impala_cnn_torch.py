@@ -157,8 +157,11 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
         if self.prev_action_mode == "concat":
             a = input_dict["prev_actions"]
             if isinstance(a, list):
-                a = torch.tensor(np.asarray(a)).squeeze()
+                a = torch.tensor(np.asarray(a))
+                if len(a.shape) > 1:
+                    a = a.squeeze()
             a = torch.nn.functional.one_hot(a, self.action_space.n).to(x.device).to(torch.float32)
+            assert len(a.shape) == len(x.shape), f"a.shape: {a.shape}, x.shape: {x.shape}"
             x = torch.cat((x, a), axis=-1)
 
         x = self.hidden_fc(x)
