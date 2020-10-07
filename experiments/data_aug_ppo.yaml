@@ -62,7 +62,7 @@ run_001_drac:
               },
               "frame_stack": True,
               "frame_stack_options": {
-                "k": 4
+                "k": 2
               },
               "frame_stack_phase_correlation": False,
               "frame_stack_phase_correlation_options": {
@@ -223,7 +223,7 @@ run_001_drac:
             custom_model: custom_impala_cnn_torch
             # Extra options to pass to custom class
             custom_options: {
-              "num_filters": [24, 48, 48],
+              "num_filters": [24, 48, 72],
               "data_augmentation_options": {
                 "mode": "drac",
                 "mode_options": {
