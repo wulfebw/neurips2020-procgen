@@ -62,7 +62,7 @@ run_001_drac:
               },
               "frame_stack": True,
               "frame_stack_options": {
-                "k": 2
+                "k": 4
               },
               "frame_stack_phase_correlation": False,
               "frame_stack_phase_correlation_options": {
