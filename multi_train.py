@@ -43,7 +43,9 @@ def write_experiments(base, num_iterations, env_names):
             base_copy["config"]["env_config"]["env_name"] = env_name
 
             for transforms in [
-                ["random_translate"],
+                ["random_flip_left_right"],
+                ["random_rotation"],
+                ["random_flip_up_down"],
             ]:
                 for data_aug_mode in ["drac"]:
                     if len(transforms) == 0:
@@ -94,15 +96,20 @@ def write_experiments(base, num_iterations, env_names):
                                         "opt_type": "adam",
                                         "weight_decay": weight_decay,
                                     },
-                                    "prev_action_mode": "concat"
+                                    "prev_action_mode": "concat",
+                                    "intrinsic_reward_options": {
+                                        "use_noop_penalty": True,
+                                        "noop_penalty_options": {
+                                            "reward": -0.1
+                                        }
+                                    }
                                 }
                                 base_copy["config"]["model"][
                                     "custom_options"] = custom_model_options
                                 transform_string = "_".join(transforms)
 
-                                exp_name = (
-                                    f"itr_{iteration}_{env_name}_{data_aug_mode}_"
-                                    f"transforms_{transform_string}_concat_action_002")
+                                exp_name = (f"itr_{iteration}_{env_name}_{data_aug_mode}_"
+                                            f"transforms_{transform_string}")
                                 exps[exp_name] = base_copy
 
     os.makedirs(base["local_dir"], exist_ok=True)

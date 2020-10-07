@@ -198,11 +198,46 @@ def random_flip(imgs, probability=1.0, flip_axis=1):
     return mask * imgs.flip(dims=(flip_axis, )) + (1 - mask) * imgs
 
 
-def random_rotation(imgs, probability=0.5):
+def random_rotation_naive(imgs):
     device = imgs.device
     b, h, w, c = imgs.shape
-    imgs = random_flip(imgs, probability=probability, flip_axis=1)
-    imgs = random_flip(imgs, probability=probability, flip_axis=2)
+    ks = np.random.choice([-1, 1, 2], b)
+    for i in range(b):
+        imgs[i] = torch.rot90(imgs[i], k=ks[i])
+    return imgs
+
+
+def random_rotation_kornia(imgs):
+    imgs = imgs.permute(0, 3, 1, 2)
+    imgs = imgs.to(torch.float32)
+    import kornia
+    t = kornia.augmentation.RandomRotation(180)
+    imgs = t(imgs)
+    imgs = imgs.permute(0, 2, 3, 1)
+    return imgs
+
+
+def random_rotation(imgs):
+    device = imgs.device
+    b, h, w, c = imgs.shape
+
+    ks = np.random.choice([-1, 1, 2], size=b)
+
+    def get_masked_rotated_images(imgs, ks, k):
+        imgs_rot = torch.rot90(imgs, k=k, dims=(1, 2))
+        mask = ks == k
+        mask = torch.from_numpy(mask).to(torch.uint8).to(imgs.device)
+        mask = mask.reshape(-1, 1).repeat((1, c)).reshape(-1, 1, 1, c)
+        return mask * imgs_rot
+
+    return (get_masked_rotated_images(imgs, ks, 1) + get_masked_rotated_images(imgs, ks, -1) +
+            get_masked_rotated_images(imgs, ks, 2))
+
+
+def random_flip_and_rotation(imgs):
+    imgs = random_rotation(imgs)
+    imgs = random_flip(imgs, probability=0.5, flip_axis=1)
+    imgs = random_flip(imgs, probability=0.5, flip_axis=2)
     return imgs
 
 
@@ -394,24 +429,32 @@ def random_flip_main():
     channels = 6
     num_iters = 100
 
-    obs = np.zeros((num_imgs, height, width, channels), dtype=np.uint8)
-    # Make flips obvious.
-    obs[:, :16, :16, :] = 255
-    # obs[:, -16:, -16:, :] = 1
+    import gym
+    env = gym.make("procgen:procgen-bigfish-v0")
+    obs = []
+    x = env.reset()
+    obs.append(x)
+    for i in range(1, num_imgs):
+        x, _, done, _ = env.step(env.action_space.sample())
+        obs.append(x)
     obs = torch.tensor(obs).to("cuda")
 
     # result_a = random_flip(copy.deepcopy(obs), flip_axis=2)
     # result_a = random_rotation(copy.deepcopy(obs))
+    result_a = random_flip_and_rotation(copy.deepcopy(obs))
 
-    # imgs = result_a
-    # import matplotlib.pyplot as plt
-    # for ob, img in zip(obs, imgs):
-    #     fig, axs = plt.subplots(2, 1, figsize=(16, 16))
-    #     axs[0].imshow(ob[:, :, :3].detach().cpu().to(torch.uint8).numpy())
-    #     axs[1].imshow(img[:, :, :3].detach().cpu().to(torch.uint8).numpy())
-    #     plt.show()
+    imgs = result_a
+    import matplotlib.pyplot as plt
+    for ob, img in zip(obs, imgs):
+        fig, axs = plt.subplots(2, 1, figsize=(16, 16))
+        axs[0].imshow(ob[:, :, :3].detach().cpu().to(torch.uint8).numpy())
+        axs[1].imshow(img[:, :, :3].detach().cpu().to(torch.uint8).numpy())
+        plt.show()
 
-    time_function(random_rotation, num_iters, obs)
+    time_function(random_rotation, num_iters, copy.deepcopy(obs))
+    time_function(random_rotation_naive, num_iters, copy.deepcopy(obs))
+    time_function(random_flip, num_iters, copy.deepcopy(obs))
+    time_function(random_flip_and_rotation, num_iters, copy.deepcopy(obs))
 
 
 if __name__ == "__main__":
