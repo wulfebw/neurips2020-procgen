@@ -22,7 +22,7 @@ run_001_drac:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/wulfebw/experiments/procgen_031
+    local_dir: /home/ubuntu/experiments/procgen_001
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -95,11 +95,11 @@ run_001_drac:
         num_sgd_iter: 2
         # Total SGD batch size across all devices for SGD. This defines the
         # minibatch size within each epoch.
-        sgd_minibatch_size: 880 # 2048 # 8 minibatches per epoch
+        sgd_minibatch_size: 2035 # 1760 # 880 # 2048 # 8 minibatches per epoch
         # Training batch size, if applicable. Should be >= rollout_fragment_length.
         # Samples batches will be concatenated together to a batch of this size,
         # which is then passed to SGD.
-        train_batch_size: 14080 # 16384 # 256 * 64
+        train_batch_size: 16280 # 14080 # 16384 # 256 * 64
         # Initial coefficient for KL divergence.
         kl_coeff: 0.0
         # Target value for KL divergence.
@@ -222,7 +222,7 @@ run_001_drac:
             custom_model: custom_impala_cnn_torch
             # Extra options to pass to custom class
             custom_options: {
-              "num_filters": [16, 32, 32],
+              "num_filters": [24, 48, 48],
               "data_augmentation_options": {
                 "mode": "drac",
                 "mode_options": {
@@ -256,7 +256,7 @@ run_001_drac:
         # Number of environments to evaluate vectorwise per worker. This enables
         # model inference batching, which can improve performance for inference
         # bottlenecked workloads.
-        num_envs_per_worker: 64 # 64 # 16 # 12
+        num_envs_per_worker: 74 # 64 # 16 # 12
 
         # Divide episodes into fragments of this many steps each during rollouts.
         # Sample batches of this size are collected from rollout workers and
@@ -305,7 +305,7 @@ run_001_drac:
         # algorithms can take advantage of trainer GPUs. This can be fractional
         # (e.g., 0.3 GPUs).
         # Note : If GPUs are not available, this will be overriden by the AIcrowd evaluators to 0.
-        num_gpus: 0.9
+        num_gpus: 0.96
 
         ################################################
         ################################################
