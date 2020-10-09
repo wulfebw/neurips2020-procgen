@@ -14,6 +14,7 @@ from ray.rllib.agents.ppo.ppo_torch_policy import (kl_and_loss_stats, vf_preds_f
 from ray.rllib.agents.trainer_template import build_trainer
 from ray.rllib.evaluation.postprocessing import Postprocessing
 from ray.rllib.policy.sample_batch import SampleBatch
+from ray.rllib.policy.torch_policy import EntropyCoeffSchedule
 from ray.rllib.policy.torch_policy_template import build_torch_policy
 from ray.rllib.utils import try_import_torch
 from ray.rllib.utils.torch_ops import sequence_mask
@@ -273,16 +274,17 @@ def intrinsic_reward_postprocess_fn(policy, sample_batch, other_agent_batches=No
     return postprocess_ppo_gae(policy, sample_batch, other_agent_batches, episode)
 
 
-DataAugmentingTorchPolicy = build_torch_policy(name="DataAugmentingTorchPolicy",
-                                               get_default_config=lambda: DEFAULT_CONFIG,
-                                               loss_fn=data_augmenting_loss,
-                                               stats_fn=data_augmenting_stats,
-                                               extra_action_out_fn=vf_preds_fetches,
-                                               postprocess_fn=intrinsic_reward_postprocess_fn,
-                                               extra_grad_process_fn=apply_grad_clipping,
-                                               before_init=setup_config,
-                                               after_init=setup_mixins,
-                                               mixins=[KLCoeffMixin, ValueNetworkMixin])
+DataAugmentingTorchPolicy = build_torch_policy(
+    name="DataAugmentingTorchPolicy",
+    get_default_config=lambda: DEFAULT_CONFIG,
+    loss_fn=data_augmenting_loss,
+    stats_fn=data_augmenting_stats,
+    extra_action_out_fn=vf_preds_fetches,
+    postprocess_fn=intrinsic_reward_postprocess_fn,
+    extra_grad_process_fn=apply_grad_clipping,
+    before_init=setup_config,
+    after_init=setup_mixins,
+    mixins=[KLCoeffMixin, ValueNetworkMixin, EntropyCoeffSchedule])
 
 
 # Well, this is a bit of a hack, but oh well.
