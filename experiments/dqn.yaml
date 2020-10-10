@@ -16,13 +16,13 @@ run_001:
     # === Stop Conditions ===
     ################################################
     stop:
-        timesteps_total: 20000000 # 8000000
+        timesteps_total: 60000000
 
     ################################################
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/wulfebw/experiments/procgen_020
+    local_dir: /home/wulfebw/experiments/procgen_000
     ### END ADDED
     checkpoint_freq: 100
     checkpoint_at_end: True
@@ -36,9 +36,9 @@ run_001:
         ################################################
         env_config:
             # Name of the procgen environment to train on # Note, that this parameter will be overriden during the evaluation by the AIcrowd evaluators.
-            env_name: bigfish # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
+            env_name: coinrun # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
             # The number of unique levels that can be generated. Set to 0 to use unlimited levels
-            num_levels: 1
+            num_levels: 0
             # The lowest seed that will be used to generated levels. 'start_level' and 'num_levels' fully specify the set of possible levels
             start_level: 0
             # Paint player velocity info in the top left corner. Only supported by certain games.
@@ -59,7 +59,6 @@ run_001:
                 "grayscale": False,
                 "dt": 2
               },
-              "normalize_obs": False,
               "frame_stack": True,
               "frame_stack_options": {
                 "k": 2
@@ -67,6 +66,11 @@ run_001:
               "frame_stack_phase_correlation": False,
               "frame_stack_phase_correlation_options": {
                 "phase_correlate": False
+              },
+              "grayscale": False,
+              "mixed_grayscale_color": False,
+              "mixed_grayscale_color_options": {
+                "num_prev_frames": 1
               }
             }
 
@@ -76,13 +80,18 @@ run_001:
         ################################################
         ################################################
         num_atoms: 51
+        v_min: 0
+        v_max: 10
         noisy: False
-        gamma: 0.99
+        sigma0: 0.5
+        gamma: 0.99 # 0.99
         lr: 0.0002
-        hiddens: [512]
-        learning_starts: 80000
-        buffer_size: 100000
-        train_batch_size: 2048
+        hiddens: [256]
+        learning_starts: 50000
+        buffer_size: 200000
+        train_batch_size: 800
+        dueling: False
+        double_q: True
         # ok, so let's say you want to update the target network every 1000 updates to the weights
         # there's a single vectorized env producing 512 steps total each timestep
         # and it takes 4 steps before returning a batch of 2048 elements
@@ -98,11 +107,11 @@ run_001:
         prioritized_replay: True
         prioritized_replay_alpha: 0.6
         final_prioritized_replay_beta: 1.0
-        prioritized_replay_beta_annealing_timesteps: 5000000
+        prioritized_replay_beta_annealing_timesteps: 4000000
         n_step: 3
         # Here are some I added
-        adam_epsilon: 0.00015
-        grad_clip: 100
+        # adam_epsilon: 0.00015
+        grad_clip: 20
         compress_observations: True
         timesteps_per_iteration: 1024
 
@@ -168,7 +177,8 @@ run_001:
             # https://github.com/ray-project/ray/blob/master/rllib/examples/custom_keras_model.py
             custom_model: dqn_impala_cnn_tf
             # Extra options to pass to custom class
-            custom_options: {"dueling": True, "v_min": 0, "v_max": 40}
+            # THIS DOESN'T WORK
+            custom_options: {}
 
         ################################################
         ################################################
@@ -218,7 +228,7 @@ run_001:
         # Number of GPUs to allocate per worker. This can be fractional. This is
         # usually needed only if your env itself requires a GPU (i.e., it is a
         # GPU-intensive video game), or model inference is unusually expensive.
-        num_gpus_per_worker: 0.07
+        num_gpus_per_worker: 0.08
         # Number of CPUs to allocate for the trainer. Note: this only takes effect
         # when running in Tune. Otherwise, the trainer runs in the main program.
         num_cpus_for_driver: 1
@@ -232,7 +242,7 @@ run_001:
         # algorithms can take advantage of trainer GPUs. This can be fractional
         # (e.g., 0.3 GPUs).
         # Note : If GPUs are not available, this will be overriden by the AIcrowd evaluators to 0.
-        num_gpus: 0.9
+        num_gpus: 0.92
 
         ################################################
         ################################################
@@ -255,7 +265,7 @@ run_001:
             type: "EpsilonGreedy"
             initial_epsilon: 1.0
             final_epsilon: 0.01
-            epsilon_timesteps: 1000000
+            epsilon_timesteps: 2000000
             
 
         ################################################
@@ -283,6 +293,12 @@ run_001:
         ################################################
         ################################################
         evaluation_interval: 50
-        evaluation_num_episodes: 15
+        evaluation_num_episodes: 50
         evaluation_num_workers: 0
-        evaluation_config: {"env_config": {"num_levels": 0}, "explore": False}
+        evaluation_config: {
+          "env_config": {
+            "num_levels": 0,
+            # "start_level": 4
+          },
+          "explore": False
+        }
