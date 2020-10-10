@@ -42,18 +42,24 @@ def sample_configs(
     base_config,
     learning_rate_options=[0.0005],
     num_sgd_iter_options=[2],
-    sgd_minibatch_size_options=[1628, 2035],
-    num_envs_rollout_len_pair_options=[(74, 55), (37, 110)],
+    sgd_minibatch_size_num_filters_pair_options=[
+        (1628, [32, 64, 64]),
+    ],
+    num_envs_rollout_len_pair_options=[(74, 55)],
     frame_stack_k_options=[2],
     transforms_options=[["random_translate"]],
+    entropy_coeff_schedule_options=[
+        [[0, 0.01], [4000000, 0.005]],
+    ],
 ):
     parameter_settings = named_product(
         learning_rate=learning_rate_options,
         num_sgd_iter=num_sgd_iter_options,
-        sgd_minibatch_size=sgd_minibatch_size_options,
+        sgd_minibatch_size_num_filters_pair=sgd_minibatch_size_num_filters_pair_options,
         num_envs_rollout_len_pair=num_envs_rollout_len_pair_options,
         frame_stack_k=frame_stack_k_options,
         transforms=transforms_options,
+        entropy_coeff_schedule=entropy_coeff_schedule_options,
     )
     configs = dict()
     for params in parameter_settings:
@@ -62,9 +68,10 @@ def sample_configs(
         # Algorithm parameters.
         config["config"]["lr"] = params.learning_rate
         config["config"]["num_sgd_iter"] = params.num_sgd_iter
-        config["config"]["sgd_minibatch_size"] = params.sgd_minibatch_size
+        config["config"]["sgd_minibatch_size"] = params.sgd_minibatch_size_num_filters_pair[0]
         config["config"]["num_envs_per_worker"] = params.num_envs_rollout_len_pair[0]
         config["config"]["rollout_fragment_length"] = params.num_envs_rollout_len_pair[1]
+        config["config"]["entropy_coeff_schedule"] = params.entropy_coeff_schedule
 
         # Environment parameters.
         env_wrapper_options = {
@@ -83,7 +90,7 @@ def sample_configs(
 
         # Model parameters.
         custom_model_options = {
-            "num_filters": [24, 48, 48],
+            "num_filters": params.sgd_minibatch_size_num_filters_pair[1],
             "data_augmentation_options": {
                 "mode": "drac" if len(params.transforms) > 0 else "none",
                 "augmentation_mode": "independent",
@@ -115,9 +122,11 @@ def sample_configs(
             "{}_itr_{}",
             f"lr_{params.learning_rate}",
             f"num_sgd_iter_{params.num_sgd_iter}",
-            f"sgd_minibatch_size_{params.sgd_minibatch_size}",
+            f"sgd_minibatch_size_{params.sgd_minibatch_size_num_filters_pair[0]}",
             f"num_envs_{params.num_envs_rollout_len_pair[0]}_rollout_length_{params.num_envs_rollout_len_pair[1]}",
             "_".join(params.transforms),
+            f"ent_sch_{'_'.join(str(v) for y in params.entropy_coeff_schedule for v in y)}",
+            f"num_filters_{'_'.join(str(v) for v in params.sgd_minibatch_size_num_filters_pair[1])}",
         ])
         configs[exp_name] = config
 
