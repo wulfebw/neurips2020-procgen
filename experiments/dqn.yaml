@@ -16,7 +16,7 @@ run_001:
     # === Stop Conditions ===
     ################################################
     stop:
-        timesteps_total: 60000000
+        timesteps_total: 10000000
 
     ################################################
     # === Settings for Checkpoints ===
@@ -85,10 +85,10 @@ run_001:
         noisy: False
         sigma0: 0.5
         gamma: 0.99 # 0.99
-        lr: 0.0002
+        lr: 0.0003
         hiddens: [256]
         learning_starts: 50000
-        buffer_size: 200000
+        buffer_size: 250000
         train_batch_size: 800
         dueling: False
         double_q: True
@@ -103,7 +103,7 @@ run_001:
         # multiply by 16 and it's 500k steps per target update (256 updates per target update)
         # # steps per target update / # steps per update = # updates per target update
         # # 512000 / 1024 = 500 updates per target update
-        target_network_update_freq: 50000
+        target_network_update_freq: 25000
         prioritized_replay: True
         prioritized_replay_alpha: 0.6
         final_prioritized_replay_beta: 1.0
@@ -264,8 +264,8 @@ run_001:
             # Can add constructor kwargs here (if any)
             type: "EpsilonGreedy"
             initial_epsilon: 1.0
-            final_epsilon: 0.01
-            epsilon_timesteps: 2000000
+            final_epsilon: 0.001
+            epsilon_timesteps: 4000000
             
 
         ################################################
@@ -278,7 +278,7 @@ run_001:
         # Whether to synchronize the statistics of remote filters.
         synchronize_filters: True
         # Whether to LZ4 compress individual observations
-        compress_observations: False
+        compress_observations: True
         # Minimum env steps to optimize for per train call. This value does
         # not affect learning, only the length of train iterations.
         timesteps_per_iteration: 0
