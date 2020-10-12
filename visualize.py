@@ -80,6 +80,7 @@ def create_parser(parser_creator=None):
                         default=10000,
                         help="Number of timesteps to roll out (overwritten by --episodes).")
     parser.add_argument("--episodes",
+                        type=int,
                         default=0,
                         help="Number of complete episodes to roll out (overrides --steps).")
     parser.add_argument("--out", default=None, help="Output filename.")
@@ -98,6 +99,10 @@ def create_parser(parser_creator=None):
                         default=False,
                         action="store_true",
                         help="If provided, uses the cpu instead of cuda.")
+    parser.add_argument("--deterministic-policy",
+                        default=False,
+                        action="store_true",
+                        help="If provided, makes the policy deterministic.")
 
     return parser
 
@@ -210,6 +215,15 @@ def run(args, parser):
 
     # Merge with `evaluation_config`.
     evaluation_config = copy.deepcopy(config.get("evaluation_config", {}))
+    # ADDED
+    if args.deterministic_policy:
+        evaluation_config["explore"] = False
+        config["explore"] = False
+    evaluation_config["env_config"]["num_levels"] = 1
+    config["env_config"]["num_levels"] = 1
+    evaluation_config["env_config"]["use_sequential_levels"] = True
+    config["env_config"]["use_sequential_levels"] = True
+    # END ADDED
     config = merge_dicts(config, evaluation_config)
     # Merge with command line `--config` settings.
     config = merge_dicts(config, args.config)
@@ -232,7 +246,7 @@ def run(args, parser):
     if args.video_dir:
         video_dir = os.path.expanduser(args.video_dir)
 
-    vis_info = rollout(agent, args.env, num_steps, num_episodes, video_dir)
+    vis_info = rollout(agent, args.env, num_steps, num_episodes, video_dir, config)
     visualize_info(vis_info, video_dir)
 
 
@@ -259,44 +273,57 @@ def keep_going(steps, num_steps, episodes, num_episodes):
     return True
 
 
-def rollout(agent, env_name, num_steps, num_episodes=0, video_dir=None):
+def get_env(agent, env_name, config, level_seed):
+    config["env_config"]["start_level"] = level_seed
     policy_agent_mapping = default_policy_agent_mapping
+    if config is None:
+        if hasattr(agent, "workers") and isinstance(agent.workers, WorkerSet):
+            env = agent.workers.local_worker().env
+            multiagent = isinstance(env, MultiAgentEnv)
+            if agent.workers.local_worker().multiagent:
+                policy_agent_mapping = agent.config["multiagent"]["policy_mapping_fn"]
 
-    if hasattr(agent, "workers") and isinstance(agent.workers, WorkerSet):
-        env = agent.workers.local_worker().env
+            policy_map = agent.workers.local_worker().policy_map
+            state_init = {p: m.get_initial_state() for p, m in policy_map.items()}
+            use_lstm = {p: len(s) > 0 for p, s in state_init.items()}
+        else:
+            env = gym.make(env_name)
+            multiagent = False
+            try:
+                policy_map = {DEFAULT_POLICY_ID: agent.policy}
+            except AttributeError:
+                raise AttributeError("Agent ({}) does not have a `policy` property! This is needed "
+                                     "for performing (trained) agent rollouts.".format(agent))
+            use_lstm = {DEFAULT_POLICY_ID: False}
+    else:
+        print("attempting to create the env")
+        import envs.custom_procgen_env_wrapper
+        env = envs.custom_procgen_env_wrapper.create_env(config["env_config"])
+        assert hasattr(agent, "workers") and isinstance(agent.workers, WorkerSet)
         multiagent = isinstance(env, MultiAgentEnv)
-        if agent.workers.local_worker().multiagent:
-            policy_agent_mapping = agent.config["multiagent"]["policy_mapping_fn"]
-
         policy_map = agent.workers.local_worker().policy_map
         state_init = {p: m.get_initial_state() for p, m in policy_map.items()}
         use_lstm = {p: len(s) > 0 for p, s in state_init.items()}
-    else:
-        env = gym.make(env_name)
-        multiagent = False
-        try:
-            policy_map = {DEFAULT_POLICY_ID: agent.policy}
-        except AttributeError:
-            raise AttributeError("Agent ({}) does not have a `policy` property! This is needed "
-                                 "for performing (trained) agent rollouts.".format(agent))
-        use_lstm = {DEFAULT_POLICY_ID: False}
 
+    return env, multiagent, policy_map, use_lstm
+
+
+def rollout(agent, env_name, num_steps, num_episodes=0, video_dir=None, config=None):
+    policy_agent_mapping = default_policy_agent_mapping
+    env, multiagent, policy_map, use_lstm = get_env(agent, env_name, config, level_seed=0)
     action_init = {p: _flatten_action(m.action_space.sample()) for p, m in policy_map.items()}
-
-    # If monitoring has been requested, manually wrap our environment with a
-    # gym monitor, which is set to record every episode.
-    if video_dir:
-        env = gym.wrappers.Monitor(env=env,
-                                   directory=video_dir,
-                                   video_callable=lambda x: True,
-                                   force=True)
 
     vis_info = collections.defaultdict(list)
     steps = 0
     episodes = 0
     all_ep_total_reward = 0
+    seeds = []
     while keep_going(steps, num_steps, episodes, num_episodes):
         mapping_cache = {}  # in case policy_agent_mapping is stochastic
+        env, multiagent, policy_map, use_lstm = get_env(agent,
+                                                        env_name,
+                                                        config,
+                                                        level_seed=episodes)
         obs = env.reset()
         agent_states = DefaultMapping(lambda agent_id: state_init[mapping_cache[agent_id]])
         prev_actions = DefaultMapping(lambda agent_id: action_init[mapping_cache[agent_id]])
@@ -331,6 +358,10 @@ def rollout(agent, env_name, num_steps, num_episodes=0, video_dir=None):
 
             action = action if multiagent else action[_DUMMY_AGENT_ID]
             next_obs, reward, done, info = env.step(action)
+
+            if done:
+                seeds.append(info["level_seed"])
+                print(seeds)
 
             if hasattr(agent.workers.local_worker().get_policy().model, "object_masks"):
                 obj_masks = agent.workers.local_worker().get_policy().model.object_masks().cpu(
