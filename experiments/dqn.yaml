@@ -22,7 +22,7 @@ run_001:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/ubuntu/experiments/procgen_001
+    local_dir: /home/ubuntu/experiments/procgen_000
     ### END ADDED
     checkpoint_freq: 100
     checkpoint_at_end: True
@@ -176,8 +176,11 @@ run_001:
             # https://github.com/ray-project/ray/blob/master/rllib/examples/custom_keras_model.py
             custom_model: dqn_impala_cnn_tf
             # Extra options to pass to custom class
-            # THIS DOESN'T WORK
-            custom_options: {}
+            custom_options: {
+              "num_filters": [24, 48, 48],
+              "dropout_prob": 0.01,
+              "weight_init": "glorot_uniform" #  "orthogonal"
+            }
 
         ################################################
         ################################################
