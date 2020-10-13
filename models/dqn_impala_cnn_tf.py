@@ -35,7 +35,7 @@ class DQNImpalaCNN(DistributionalQTFModel):
     def __init__(self, obs_space, action_space, num_outputs, model_config, name, **kwargs):
         super().__init__(obs_space, action_space, num_outputs, model_config, name, **kwargs)
 
-        depths = [16, 32, 32]
+        depths = [24, 48, 48]
 
         inputs = tf.keras.layers.Input(shape=obs_space.shape, name="observations")
         scaled_inputs = tf.cast(inputs, tf.float32) / 255.0
