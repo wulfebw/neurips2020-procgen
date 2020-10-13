@@ -6,9 +6,6 @@ import torch
 import torch.nn as nn
 import torchvision
 
-# from algorithms.data_augmenting_ppo_agent.color_jitter_layer import ColorJitterLayer
-# from color_jitter_layer import ColorJitterLayer
-
 
 def plot_translated(imgs, translated, w_translations, h_translations, num_display=10):
     n, h, w, c = imgs.shape
@@ -239,6 +236,96 @@ def random_flip_and_rotation(imgs):
     imgs = random_flip(imgs, probability=0.5, flip_axis=1)
     imgs = random_flip(imgs, probability=0.5, flip_axis=2)
     return imgs
+
+
+"""Functions that use data augmentations."""
+
+PRIORITY_ORDERED_TRANSFORMS = [
+    "random_rotation",
+    "random_flip_left_right",
+    "random_flip_up_down",
+    "random_cutout",
+    "random_cutout_color",
+    "random_channel_drop",
+    "random_conv",
+    "random_translate",
+]
+
+
+def sort_transforms(ts):
+    return sorted(ts, key=lambda x: PRIORITY_ORDERED_TRANSFORMS.index(x))
+
+
+def apply_transform(imgs, transform, options):
+    """Transforms the provided images with the requested transform.
+
+    Returns:
+        A tuple of the transformed images and a mask of same length as images
+        indicating whether to apply the policy loss on the given transformed images.
+    """
+    policy_weight_mask = torch.ones(len(imgs), dtype=torch.float32, device=imgs.device)
+    if transform == "random_translate":
+        imgs = random_translate_via_index(imgs, **options.get("random_translate_options", {}))
+    elif transform == "random_cutout_color":
+        imgs = random_cutout_color_fast(imgs, **options.get("random_cutout_color_options", {}))
+    elif transform == "random_cutout":
+        imgs = random_cutout(imgs, **options.get("random_cutout_options", {}))
+    elif transform == "random_channel_drop":
+        imgs = random_channel_drop(imgs, **options.get("random_channel_drop_options", {}))
+    elif transform == "random_flip_up_down":
+        imgs = random_flip(imgs, flip_axis=1, **options.get("random_flip_options", {}))
+        policy_weight_mask = torch.zeros(len(imgs), dtype=torch.float32, device=imgs.device)
+    elif transform == "random_flip_left_right":
+        imgs = random_flip(imgs, flip_axis=2, **options.get("random_flip_options", {}))
+        policy_weight_mask = torch.zeros(len(imgs), dtype=torch.float32, device=imgs.device)
+    elif transform == "random_rotation":
+        imgs = random_rotation(imgs, **options.get("random_rotation_options", {}))
+        policy_weight_mask = torch.zeros(len(imgs), dtype=torch.float32, device=imgs.device)
+    else:
+        raise NotImplementedError(f"Transform not implemented {transform}")
+
+    return imgs, policy_weight_mask
+
+
+def apply_data_augmentation_independently(imgs, options):
+    num_transforms = len(options["transforms"])
+    assert num_transforms > 0
+    num_samples = len(imgs)
+    assert num_samples > num_transforms
+    num_samples_per_transform = num_samples // num_transforms
+    transform_indices = np.random.permutation(num_transforms)
+    policy_weight_mask = torch.ones(len(imgs), dtype=torch.float32, device=imgs.device)
+
+    for i, transform_index in enumerate(transform_indices):
+        transform = options["transforms"][transform_index]
+        start = i * num_samples_per_transform
+        end = start + num_samples_per_transform
+        if i == num_transforms - 1:
+            end = num_samples
+        imgs[start:end], policy_weight_mask[start:end] = apply_transform(
+            imgs[start:end], transform, options)
+    return imgs, policy_weight_mask
+
+
+def apply_data_augmentation_stacked(imgs, options):
+    raise NotImplementedError("need to implement policy weighting for some transforms")
+    assert len(options["transforms"]) > 0
+    for transform in sort_transforms(options["transforms"]):
+        imgs = apply_transform(imgs, transform, options)
+    return imgs
+
+
+def apply_data_augmentation(imgs, options):
+    aug_mode = options.get("augmentation_mode", "independent")
+    if aug_mode == "independent":
+        return apply_data_augmentation_independently(imgs, options)
+    elif aug_mode == "stacked":
+        return apply_data_augmentation_stacked(imgs, options)
+    else:
+        raise ValueError(f"Invalid augmentation mode: {aug_mode}")
+
+
+"""Some testing functions; terrible approach."""
 
 
 def time_function(f, num_iters, *args):
