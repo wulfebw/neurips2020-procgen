@@ -5,16 +5,15 @@ import numpy as np
 import ray
 from ray.rllib.agents.a3c.a3c_torch_policy import apply_grad_clipping
 from ray.rllib.agents.callbacks import DefaultCallbacks
-from ray.rllib.agents.ppo.ppo import (DEFAULT_CONFIG, validate_config, update_kl,
-                                      warn_about_bad_reward_scales, choose_policy_optimizer)
+from ray.rllib.agents.ppo.ppo import (DEFAULT_CONFIG, validate_config, update_kl, warn_about_bad_reward_scales,
+                                      choose_policy_optimizer)
 from ray.rllib.agents.ppo.ppo_tf_policy import postprocess_ppo_gae, setup_config
-from ray.rllib.agents.ppo.ppo_torch_policy import (kl_and_loss_stats, vf_preds_fetches,
-                                                   setup_mixins, KLCoeffMixin, ValueNetworkMixin,
-                                                   PPOLoss)
+from ray.rllib.agents.ppo.ppo_torch_policy import (kl_and_loss_stats, vf_preds_fetches, setup_mixins, KLCoeffMixin,
+                                                   ValueNetworkMixin, PPOLoss)
 from ray.rllib.agents.trainer_template import build_trainer
 from ray.rllib.evaluation.postprocessing import Postprocessing
 from ray.rllib.policy.sample_batch import SampleBatch
-from ray.rllib.policy.torch_policy import EntropyCoeffSchedule
+from ray.rllib.policy.torch_policy import EntropyCoeffSchedule, LearningRateSchedule
 from ray.rllib.policy.torch_policy_template import build_torch_policy
 from ray.rllib.utils import try_import_torch
 from ray.rllib.utils.torch_ops import sequence_mask
@@ -92,8 +91,7 @@ def apply_data_augmentation_independently(imgs, options):
         end = start + num_samples_per_transform
         if i == num_transforms - 1:
             end = num_samples
-        imgs[start:end], policy_weight_mask[start:end] = apply_transform(
-            imgs[start:end], transform, options)
+        imgs[start:end], policy_weight_mask[start:end] = apply_transform(imgs[start:end], transform, options)
     return imgs, policy_weight_mask
 
 
@@ -159,11 +157,10 @@ def drac_data_augmenting_loss(policy,
     no_aug_action_dist_detached = dist_class(no_aug_logits.detach(), model)
     no_aug_value = model.value_function().detach()
 
-    policy_loss = compute_ppo_loss(policy, dist_class, model, train_batch, no_aug_action_dist,
-                                   no_aug_state)
+    policy_loss = compute_ppo_loss(policy, dist_class, model, train_batch, no_aug_action_dist, no_aug_state)
 
-    train_batch["obs"], policy_weight_mask = apply_data_augmentation(
-        train_batch["obs"], model.data_augmentation_options)
+    train_batch["obs"], policy_weight_mask = apply_data_augmentation(train_batch["obs"],
+                                                                     model.data_augmentation_options)
     model.norm_layers_active = True
     aug_logits, aug_state = model.from_batch(train_batch)
     model.norm_layers_active = False
@@ -171,10 +168,8 @@ def drac_data_augmenting_loss(policy,
     aug_value = model.value_function()
 
     data_aug_value_loss = 0.5 * ((no_aug_value - aug_value)**2).mean()
-    data_aug_policy_loss = (aug_action_dist.kl(no_aug_action_dist_detached) *
-                            policy_weight_mask).mean()
-    data_aug_loss = (drac_value_weight * data_aug_value_loss +
-                     drac_policy_weight * data_aug_policy_loss)
+    data_aug_policy_loss = (aug_action_dist.kl(no_aug_action_dist_detached) * policy_weight_mask).mean()
+    data_aug_loss = (drac_value_weight * data_aug_value_loss + drac_policy_weight * data_aug_policy_loss)
 
     return policy_loss + drac_weight * data_aug_loss
 
@@ -182,8 +177,7 @@ def drac_data_augmenting_loss(policy,
 def simple_data_augmenting_loss(policy, model, dist_class, train_batch):
     assert len(model.data_augmentation_options["transforms"]) > 0
 
-    train_batch["obs"] = apply_data_augmentation(train_batch["obs"],
-                                                 model.data_augmentation_options)
+    train_batch["obs"] = apply_data_augmentation(train_batch["obs"], model.data_augmentation_options)
     logits, state = model.from_batch(train_batch)
     action_dist = dist_class(logits, model)
     return compute_ppo_loss(policy, dist_class, model, train_batch, action_dist, state)
@@ -284,7 +278,7 @@ DataAugmentingTorchPolicy = build_torch_policy(
     extra_grad_process_fn=apply_grad_clipping,
     before_init=setup_config,
     after_init=setup_mixins,
-    mixins=[KLCoeffMixin, ValueNetworkMixin, EntropyCoeffSchedule])
+    mixins=[KLCoeffMixin, ValueNetworkMixin, EntropyCoeffSchedule, LearningRateSchedule])
 
 
 # Well, this is a bit of a hack, but oh well.
@@ -302,10 +296,7 @@ def get_optimizer(policy):
                                 weight_decay=config.get("weight_decay", 0),
                                 amsgrad=config.get("amsgrad", False))
     elif opt_type == "sgd":
-        return torch.optim.SGD(policy.model.parameters(),
-                               lr=lr,
-                               momentum=config.get("momentum", 0.9),
-                               nesterov=True)
+        return torch.optim.SGD(policy.model.parameters(), lr=lr, momentum=config.get("momentum", 0.9), nesterov=True)
     else:
         raise ValueError(f"Invalid optimizer: {opt_type}")
 
