@@ -85,6 +85,8 @@ def drac_data_augmenting_loss(policy,
     data_aug_loss = (drac_value_weight * data_aug_value_loss +
                      drac_policy_weight * data_aug_policy_loss)
 
+    policy.loss_obj.data_aug_loss = data_aug_loss
+
     return policy_loss + drac_weight * data_aug_loss
 
 
@@ -120,6 +122,8 @@ def data_augmenting_loss(policy, model, dist_class, train_batch):
 
 def data_augmenting_stats(policy, train_batch):
     stats = kl_and_loss_stats(policy, train_batch)
+    if hasattr(policy.loss_obj, "data_aug_loss"):
+        stats["drac_loss_unweighted"] = policy.loss_obj.data_aug_loss
     return stats
 
 
