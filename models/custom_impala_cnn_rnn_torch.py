@@ -107,7 +107,7 @@ class CustomImpalaCNNRNN(RecurrentTorchModel, nn.Module):
     @override(RecurrentTorchModel)
     def forward_rnn(self, inputs, actions, state, seq_lens):
         # import matplotlib.pyplot as plt
-        # img = (255.0 * x[0, 0]).int().detach().cpu().numpy()
+        # img = inputs[0, 0].int().detach().cpu().numpy()
         # plt.imshow(img)
         # plt.show()
 
