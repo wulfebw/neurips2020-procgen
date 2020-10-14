@@ -103,7 +103,10 @@ def create_parser(parser_creator=None):
                         default=False,
                         action="store_true",
                         help="If provided, makes the policy deterministic.")
-
+    parser.add_argument("--level-seed",
+                        type=int,
+                        default=None,
+                        help="If provided, only runs on this one level seed.")
     return parser
 
 
@@ -223,6 +226,9 @@ def run(args, parser):
     config["env_config"]["num_levels"] = 1
     evaluation_config["env_config"]["use_sequential_levels"] = True
     config["env_config"]["use_sequential_levels"] = True
+    evaluation_config["env_config"][
+        "start_level"] = 0 if args.level_seed is None else args.level_seed
+    config["env_config"]["start_level"] = 0 if args.level_seed is None else args.level_seed
     # END ADDED
     config = merge_dicts(config, evaluation_config)
     # Merge with command line `--config` settings.
@@ -246,7 +252,13 @@ def run(args, parser):
     if args.video_dir:
         video_dir = os.path.expanduser(args.video_dir)
 
-    vis_info = rollout(agent, args.env, num_steps, num_episodes, video_dir, config)
+    vis_info = rollout(agent,
+                       args.env,
+                       num_steps,
+                       num_episodes,
+                       video_dir,
+                       config,
+                       level_seed=args.level_seed)
     visualize_info(vis_info, video_dir)
 
 
@@ -295,6 +307,7 @@ def get_env(agent, env_name, config, level_seed):
                 raise AttributeError("Agent ({}) does not have a `policy` property! This is needed "
                                      "for performing (trained) agent rollouts.".format(agent))
             use_lstm = {DEFAULT_POLICY_ID: False}
+            state_init = None
     else:
         print("attempting to create the env")
         import envs.custom_procgen_env_wrapper
@@ -305,12 +318,23 @@ def get_env(agent, env_name, config, level_seed):
         state_init = {p: m.get_initial_state() for p, m in policy_map.items()}
         use_lstm = {p: len(s) > 0 for p, s in state_init.items()}
 
-    return env, multiagent, policy_map, use_lstm
+    return env, multiagent, policy_map, use_lstm, state_init
 
 
-def rollout(agent, env_name, num_steps, num_episodes=0, video_dir=None, config=None):
+def rollout(agent,
+            env_name,
+            num_steps,
+            num_episodes=0,
+            video_dir=None,
+            config=None,
+            level_seed=None):
     policy_agent_mapping = default_policy_agent_mapping
-    env, multiagent, policy_map, use_lstm = get_env(agent, env_name, config, level_seed=0)
+    env, multiagent, policy_map, use_lstm, state_init = get_env(
+        agent,
+        env_name,
+        config,
+        level_seed=0 if level_seed is None else level_seed,
+    )
     action_init = {p: _flatten_action(m.action_space.sample()) for p, m in policy_map.items()}
 
     vis_info = collections.defaultdict(list)
@@ -320,10 +344,12 @@ def rollout(agent, env_name, num_steps, num_episodes=0, video_dir=None, config=N
     seeds = []
     while keep_going(steps, num_steps, episodes, num_episodes):
         mapping_cache = {}  # in case policy_agent_mapping is stochastic
-        env, multiagent, policy_map, use_lstm = get_env(agent,
-                                                        env_name,
-                                                        config,
-                                                        level_seed=episodes)
+        env, multiagent, policy_map, use_lstm, _ = get_env(
+            agent,
+            env_name,
+            config,
+            level_seed=episodes if level_seed is None else level_seed,
+        )
         obs = env.reset()
         agent_states = DefaultMapping(lambda agent_id: state_init[mapping_cache[agent_id]])
         prev_actions = DefaultMapping(lambda agent_id: action_init[mapping_cache[agent_id]])
