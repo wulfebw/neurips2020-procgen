@@ -38,9 +38,9 @@ run_001_drac:
             # Name of the procgen environment to train on # Note, that this parameter will be overriden during the evaluation by the AIcrowd evaluators.
             env_name: coinrun # caveflyer # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
             # The number of unique levels that can be generated. Set to 0 to use unlimited levels
-            num_levels: 1
+            num_levels: 200
             # The lowest seed that will be used to generated levels. 'start_level' and 'num_levels' fully specify the set of possible levels
-            start_level: 4
+            start_level: 0
             # Paint player velocity info in the top left corner. Only supported by certain games.
             paint_vel_info: False
             # Use randomly generated assets in place of human designed assets
@@ -241,7 +241,7 @@ run_001_drac:
                 "transforms": ["random_translate"],
               },
               "intrinsic_reward_options": {
-                "use_noop_penalty": False, # True
+                "use_noop_penalty": True,
                 "noop_penalty_options": {
                   "reward": -0.1
                 }
