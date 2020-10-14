@@ -197,12 +197,12 @@ DataAugmentingTorchPolicy = build_torch_policy(
 
 
 # Well, this is a bit of a hack, but oh well.
-def get_optimizer(policy):
-    config = policy.model.optimizer_options
-
+def get_optimizer(policy, config={"opt_type": "adam"}):
     lr = policy.config["lr"]
-    opt_type = config.get("opt_type", "adam")
+    if hasattr(policy.model, "optimizer_options"):
+        config = policy.model.optimizer_options
 
+    opt_type = config.get("opt_type", "adam")
     if opt_type == "adam":
         return torch.optim.Adam(policy.model.parameters(), lr=lr)
     if opt_type == "adamw":
