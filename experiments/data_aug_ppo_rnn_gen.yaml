@@ -119,6 +119,8 @@ run_001_drac:
         # there's some bug related to gradient clipping, so if this is set it causes an error
         # it might have to do with my install of everything
         # grad_clip: 0.5
+        grad_clip_elementwise: 1.0
+
         # Which observation filter to apply to the observation.
         observation_filter: NoFilter
         # Share layers for value function. If you set this to True, it's important

@@ -183,6 +183,28 @@ def intrinsic_reward_postprocess_fn(policy, sample_batch, other_agent_batches=No
     return postprocess_ppo_gae(policy, sample_batch, other_agent_batches, episode)
 
 
+def compute_global_grad_norm(param_groups, norm_type=2, device="cpu"):
+    norms = []
+    for param_group in param_groups:
+        for param in param_group["params"]:
+            if param.grad is not None:
+                norms += [torch.norm(param.grad.detach(), norm_type)]
+    return torch.norm(torch.stack(norms), norm_type).to(device)
+
+
+def apply_grad_clipping_elementwise(policy, optimizer, loss):
+    info = {}
+    if policy.config.get("grad_clip_elementwise", None) is not None:
+        info["initial_global_grad_norm"] = compute_global_grad_norm(optimizer.param_groups)
+        for param_group in optimizer.param_groups:
+            nn.utils.clip_grad_value_(param_group["params"], policy.config["grad_clip_elementwise"])
+        info["final_global_grad_norm"] = compute_global_grad_norm(optimizer.param_groups)
+    return info
+
+
+# Custom params to be available in the policy.
+DEFAULT_CONFIG["grad_clip_elementwise"] = None
+
 DataAugmentingTorchPolicy = build_torch_policy(
     name="DataAugmentingTorchPolicy",
     get_default_config=lambda: DEFAULT_CONFIG,
@@ -190,7 +212,7 @@ DataAugmentingTorchPolicy = build_torch_policy(
     stats_fn=data_augmenting_stats,
     extra_action_out_fn=vf_preds_fetches,
     postprocess_fn=intrinsic_reward_postprocess_fn,
-    extra_grad_process_fn=apply_grad_clipping,
+    extra_grad_process_fn=apply_grad_clipping_elementwise,
     before_init=setup_config,
     after_init=setup_mixins,
     mixins=[KLCoeffMixin, ValueNetworkMixin, EntropyCoeffSchedule])
