@@ -16,13 +16,13 @@ run_001_drac:
     # === Stop Conditions ===
     ################################################
     stop:
-        timesteps_total: 6000000
+        timesteps_total: 8000000
 
     ################################################
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/wulfebw/experiments/procgen_000
+    local_dir: /home/wulfebw/experiments/procgen_033
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -36,7 +36,7 @@ run_001_drac:
         ################################################
         env_config:
             # Name of the procgen environment to train on # Note, that this parameter will be overriden during the evaluation by the AIcrowd evaluators.
-            env_name: coinrun # caveflyer # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
+            env_name: caveflyer # caveflyer # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
             # The number of unique levels that can be generated. Set to 0 to use unlimited levels
             num_levels: 200
             # The lowest seed that will be used to generated levels. 'start_level' and 'num_levels' fully specify the set of possible levels
@@ -59,7 +59,7 @@ run_001_drac:
                 "grayscale": False,
                 "dt": 2
               },
-              "frame_stack": True,
+              "frame_stack": False,
               "frame_stack_options": {
                 "k": 1
               },
@@ -96,7 +96,7 @@ run_001_drac:
         # Total SGD batch size across all devices for SGD. This defines the
         # minibatch size within each epoch.
         # This should be divisible by max_seq_len in recurrent case (or should it?)
-        sgd_minibatch_size: 1024 # 1760 # 880 # 2048 # 8 minibatches per epoch
+        sgd_minibatch_size: 512 # 1760 # 880 # 2048 # 8 minibatches per epoch
         # Training batch size, if applicable. Should be >= rollout_fragment_length.
         # Samples batches will be concatenated together to a batch of this size,
         # which is then passed to SGD.
@@ -119,7 +119,7 @@ run_001_drac:
         # there's some bug related to gradient clipping, so if this is set it causes an error
         # it might have to do with my install of everything
         # grad_clip: 0.5
-        grad_clip_elementwise: 1.0
+        grad_clip_elementwise: 0.5
 
         # Which observation filter to apply to the observation.
         observation_filter: NoFilter
@@ -224,7 +224,7 @@ run_001_drac:
             # https://github.com/ray-project/ray/blob/master/rllib/examples/custom_keras_model.py
             custom_model: custom_impala_cnn_rnn_torch
             # Options for the model.
-            max_seq_len: 55
+            max_seq_len: 16
             use_lstm: true
             lstm_cell_size: 256 # I'm actually using gru; kind of annoying it's called `lstm`.
             # Extra options to pass to custom class
@@ -268,7 +268,7 @@ run_001_drac:
         # Number of environments to evaluate vectorwise per worker. This enables
         # model inference batching, which can improve performance for inference
         # bottlenecked workloads.
-        num_envs_per_worker: 64 # 64 # 16 # 12
+        num_envs_per_worker: 256 # 64 # 16 # 12
 
         # Divide episodes into fragments of this many steps each during rollouts.
         # Sample batches of this size are collected from rollout workers and
@@ -285,7 +285,7 @@ run_001_drac:
         #
         # The dataflow here can vary per algorithm. For example, PPO further
         # divides the train batch into minibatches for multi-epoch SGD.
-        rollout_fragment_length: 64 # 256
+        rollout_fragment_length: 16 # 256
 
         # Whether to rollout "complete_episodes" or "truncate_episodes" to
         # `rollout_fragment_length` length unrolls. Episode truncation guarantees
@@ -362,7 +362,7 @@ run_001_drac:
         # === Evaluation Settings ===
         ################################################
         ################################################
-        evaluation_interval: 425 # 568 # unfortunate to have to hardcode this, but not sure how better to do it.
+        evaluation_interval: 480 # unfortunate to have to hardcode this, but not sure how better to do it.
         evaluation_num_episodes: 2000
         evaluation_num_workers: 0
         evaluation_config: {"env_config": {"num_levels": 0, "env_wrapper_options": {"normalize_reward": False}}}

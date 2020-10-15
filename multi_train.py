@@ -63,23 +63,138 @@ class PPOSamplingParams:
         return 1 - (self.num_workers * self.num_gpus_per_worker)
 
 
+def get_is_recurrent(config):
+    if "rnn" in config["config"]["model"]["custom_model"]:
+        return True
+    return False
+
+
+def set_env_params(config, params, is_recurrent):
+    # Environment parameters.
+    use_frame_stack = True
+    if is_recurrent or params.frame_stack_k == 1:
+        use_frame_stack = False
+
+    env_wrapper_options = {
+        "frame_stack": use_frame_stack,
+        "frame_stack_options": {
+            "k": params.frame_stack_k
+        },
+        "frame_diff": False,
+        "normalize_reward": False,
+        "grayscale": False,
+        "mixed_grayscale_color": False,
+        "mixed_grayscale_color_options": {
+            "num_prev_frames": 1
+        },
+        "frame_stack_phase_correlation": False,
+    }
+    config["config"]["env_config"]["env_wrapper_options"] = env_wrapper_options
+    return config
+
+
+def set_ppo_algorithm_params(config, params):
+    config["config"]["lr"] = params.learning_rate
+    config["config"]["num_sgd_iter"] = params.num_sgd_iter
+    config["config"]["sgd_minibatch_size"] = params.sampling_params.sgd_minibatch_size
+    config["config"]["num_workers"] = params.sampling_params.num_workers
+    config["config"]["num_envs_per_worker"] = params.sampling_params.num_envs_per_worker
+    config["config"]["rollout_fragment_length"] = params.sampling_params.rollout_fragment_length
+    config["config"]["entropy_coeff_schedule"] = params.entropy_coeff_schedule
+
+    # All that matters is these gpu resource parameters add to 1.
+    config["config"]["num_gpus_per_worker"] = params.sampling_params.num_gpus_per_worker
+    config["config"]["num_gpus"] = params.sampling_params.num_gpus
+    return config
+
+
+def set_ppo_model_params(config, params, is_recurrent):
+    if is_recurrent:
+        config["config"]["model"]["max_seq_len"] = params.max_seq_len
+        config["config"]["model"]["lstm_cell_size"] = params.lstm_cell_size
+        config["config"]["model"]["use_lstm"] = True
+
+    # Params common to cnn and rnn.
+    custom_model_options = {
+        "num_filters": params.num_filters,
+        "dropout_prob": params.dropout_prob,
+        "prev_action_mode": "concat",
+        "weight_init": params.weight_init,
+        "data_augmentation_options": {
+            "mode": "drac" if len(params.transforms) > 0 else "none",
+            "augmentation_mode": "independent",
+            "mode_options": {
+                "drac": {
+                    "drac_weight": params.drac_weight,
+                    "drac_value_weight": 1,
+                    "drac_policy_weight": 1,
+                    "recurrent_repeat_transform": True,
+                }
+            },
+            "transforms": params.transforms,
+        },
+        "optimizer_options": {
+            "opt_type": "adam",
+            "weight_decay": 0.0,
+        },
+        "intrinsic_reward_options": {
+            "use_noop_penalty": True,
+            "noop_penalty_options": {
+                "reward": -0.1
+            }
+        }
+    }
+    config["config"]["model"]["custom_options"] = custom_model_options
+    return config
+
+
+def get_ppo_exp_name(params, is_recurrent):
+    # Start with the common params.
+    exp_name = "_".join([
+        "{}_itr_{}",
+        f"{'rnn' if is_recurrent else 'cnn'}",
+        f"lr_{params.learning_rate}",
+        f"sgd_itr_{params.num_sgd_iter}",
+        f"filters_{'_'.join(str(v) for v in params.num_filters)}",
+        f"{params.sampling_params}",
+        "_".join(params.transforms),
+        f"ent_sch_{'_'.join(str(v) for y in params.entropy_coeff_schedule for v in y)}",
+        f"dropout_{params.dropout_prob}",
+        f"drac_{params.drac_weight}",
+    ])
+
+    # Add the params that only apply in the recurrent or non-recurrent cases.
+    if is_recurrent:
+        exp_name += "_" + "_".join([
+            f"rnn_size_{params.lstm_cell_size}",
+            f"weight_init_{params.weight_init}",
+            f"max_seq_len_{params.max_seq_len}",
+        ])
+    else:
+        exp_name += "_" + "_".join([
+            f"frame_stack_{params.frame_stack_k}",
+        ])
+    return exp_name
+
+
 def sample_configs(
     base_config,
     learning_rate_options=[0.0005],
     num_sgd_iter_options=[2],
-    num_filters_options=[[32, 64, 64]],
+    num_filters_options=[[24, 48, 48]],
     lstm_cell_size_options=[256],
     weight_init_options=["default"],
-    sampling_params_options=[PPOSamplingParams(4, 128, 32, 1024)],
+    sampling_params_options=[PPOSamplingParams(4, 256, 16, 1024)],
     max_seq_len_options=[16],
     frame_stack_k_options=[1],
     transforms_options=[["random_translate"]],
     entropy_coeff_schedule_options=[
         [[0, 0.01]],
     ],
-    dropout_prob_options=[0.05],
+    dropout_prob_options=[0.1],
     drac_weight_options=[0.1],
 ):
+    is_recurrent = get_is_recurrent(base_config)
     parameter_settings = named_product(
         learning_rate=learning_rate_options,
         num_sgd_iter=num_sgd_iter_options,
@@ -97,89 +212,11 @@ def sample_configs(
     configs = dict()
     for params in parameter_settings:
         config = copy.deepcopy(base_config)
-
-        # Algorithm parameters.
-        config["config"]["lr"] = params.learning_rate
-        config["config"]["num_sgd_iter"] = params.num_sgd_iter
-        config["config"]["sgd_minibatch_size"] = params.sampling_params.sgd_minibatch_size
-        config["config"]["num_workers"] = params.sampling_params.num_workers
-        config["config"]["num_envs_per_worker"] = params.sampling_params.num_envs_per_worker
-        config["config"]["rollout_fragment_length"] = params.sampling_params.rollout_fragment_length
-        config["config"]["entropy_coeff_schedule"] = params.entropy_coeff_schedule
-
-        # All that matters is these gpu resource parameters add to 1.
-        config["config"]["num_gpus_per_worker"] = params.sampling_params.num_gpus_per_worker
-        config["config"]["num_gpus"] = params.sampling_params.num_gpus
-
-        # Environment parameters.
-        env_wrapper_options = {
-            "frame_stack": True,
-            "frame_stack_options": {
-                "k": params.frame_stack_k
-            },
-            "normalize_reward": False,
-            "grayscale": False,
-            "mixed_grayscale_color": False,
-            "mixed_grayscale_color_options": {
-                "num_prev_frames": 1
-            }
-        }
-        config["config"]["env_config"]["env_wrapper_options"] = env_wrapper_options
-
-        # Model parameters.
-        config["config"]["model"]["max_seq_len"] = params.max_seq_len
-        config["config"]["model"]["lstm_cell_size"] = params.lstm_cell_size
-        use_lstm = True  # Fuck you future me.
-        config["config"]["model"]["use_lstm"] = use_lstm
-        custom_model_options = {
-            "num_filters": params.num_filters,
-            "dropout_prob": params.dropout_prob,
-            "prev_action_mode": "concat",
-            "weight_init": params.weight_init,
-            "data_augmentation_options": {
-                "mode": "drac" if len(params.transforms) > 0 else "none",
-                "augmentation_mode": "independent",
-                "mode_options": {
-                    "drac": {
-                        "drac_weight": params.drac_weight,
-                        "drac_value_weight": 1,
-                        "drac_policy_weight": 1,
-                        "recurrent_repeat_transform": True,
-                    }
-                },
-                "transforms": params.transforms,
-            },
-            "optimizer_options": {
-                "opt_type": "adam",
-                "weight_decay": 0.0,
-            },
-            "intrinsic_reward_options": {
-                "use_noop_penalty": True,
-                "noop_penalty_options": {
-                    "reward": -0.1
-                }
-            }
-        }
-        config["config"]["model"]["custom_options"] = custom_model_options
-
-        exp_name = "_".join([
-            "{}_itr_{}",
-            f"{'rnn' if use_lstm else 'cnn'}",
-            f"lr_{params.learning_rate}",
-            f"sgd_itr_{params.num_sgd_iter}",
-            f"filters_{'_'.join(str(v) for v in params.num_filters)}",
-            f"rnn_size_{params.lstm_cell_size}",
-            f"weight_init_{params.weight_init}",
-            f"{params.sampling_params}",
-            f"max_seq_len_{params.max_seq_len}",
-            f"frame_stack_{params.frame_stack_k}",
-            "_".join(params.transforms),
-            f"ent_sch_{'_'.join(str(v) for y in params.entropy_coeff_schedule for v in y)}",
-            f"dropout_{params.dropout_prob}",
-            f"drac_{params.drac_weight}",
-        ])
+        config = set_ppo_algorithm_params(config, params)
+        config = set_env_params(config, params, is_recurrent)
+        config = set_ppo_model_params(config, params, is_recurrent)
+        exp_name = get_ppo_exp_name(params, is_recurrent)
         configs[exp_name] = config
-
     return configs
 
 
