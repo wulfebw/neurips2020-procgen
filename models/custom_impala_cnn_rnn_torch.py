@@ -22,6 +22,7 @@ class CustomImpalaCNNRNN(RecurrentTorchModel, nn.Module):
                  dropout_prob=0.0,
                  policy_fc_size=256,
                  value_fc_size=256,
+                 policy_activation="relu",
                  prev_action_mode="none",
                  weight_init="default",
                  data_augmentation_options={},
@@ -76,15 +77,29 @@ class CustomImpalaCNNRNN(RecurrentTorchModel, nn.Module):
             raise ValueError(f"Unsupported weight initialization method: {weight_init}")
 
         # Potentially concat the action taken previously.
-        logits_fc_shape_in = policy_fc_size
-        value_fc_shape_in = value_fc_size
+        policy_fc1_size_in = self.rnn_hidden_dim
+        policy_fc2_size_in = policy_fc_size
+        value_fc1_size_in = self.rnn_hidden_dim
+        value_fc2_size_in = value_fc_size
         if prev_action_mode == "concat":
-            logits_fc_shape_in += self.action_space.n
-            value_fc_shape_in += self.action_space.n
+            policy_fc1_size_in += self.action_space.n
+            policy_fc2_size_in += self.action_space.n
+            value_fc1_size_in += self.action_space.n
+            value_fc2_size_in += self.action_space.n
 
         # Define the output layers.
-        self.logits_fc = nn.Linear(in_features=logits_fc_shape_in, out_features=num_outputs)
-        self.value_fc = nn.Linear(in_features=value_fc_shape_in, out_features=1)
+        self.policy_fc1 = nn.Linear(in_features=policy_fc1_size_in, out_features=policy_fc_size)
+        self.policy_fc2 = nn.Linear(in_features=policy_fc2_size_in, out_features=num_outputs)
+        self.value_fc1 = nn.Linear(in_features=value_fc1_size_in, out_features=value_fc_size)
+        self.value_fc2 = nn.Linear(in_features=value_fc2_size_in, out_features=1)
+
+        # The policy non-linearity might be better of as a tanh, so provide the option to change it.
+        if policy_activation == "relu":
+            self.policy_activation = nn.functional.relu
+        elif policy_activation == "tanh":
+            self.policy_activation = nn.functional.tanh
+        else:
+            raise ValueError(f"Unsupported activation function: {policy_activation}")
 
         # Dropout for the fully connected layers.
         self.dropout_fc = nn.Dropout(dropout_prob)
@@ -174,9 +189,22 @@ class CustomImpalaCNNRNN(RecurrentTorchModel, nn.Module):
         if self.prev_action_mode == "concat":
             x = torch.cat((x, a), axis=-1)
 
-        # Generate the model output.
-        logits = self.logits_fc(x)
-        value = self.value_fc(x)
+        # Generate the policy output.
+        policy_input = self.policy_fc1(x)
+        policy_input = self.policy_activation(policy_input)
+        policy_input = self.dropout_fc(policy_input)
+        if self.prev_action_mode == "concat":
+            policy_input = torch.cat((policy_input, a), axis=-1)
+        logits = self.policy_fc2(policy_input)
+
+        # Generate the value output.
+        value_input = self.value_fc1(x)
+        value_input = nn.functional.relu(value_input)
+        value_input = self.dropout_fc(value_input)
+        if self.prev_action_mode == "concat":
+            value_input = torch.cat((value_input, a), axis=-1)
+        value = self.value_fc2(value_input)
+
         self._cur_value = value.squeeze(-1)
         return logits, [h]
 
