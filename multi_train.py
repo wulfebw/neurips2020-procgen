@@ -71,13 +71,13 @@ def sample_configs(
     lstm_cell_size_options=[256],
     weight_init_options=["default"],
     sampling_params_options=[PPOSamplingParams(4, 128, 32, 1024)],
-    max_seq_len_options=[16],
+    max_seq_len_options=[32],
     frame_stack_k_options=[1],
     transforms_options=[["random_translate"]],
     entropy_coeff_schedule_options=[
         [[0, 0.01]],
     ],
-    dropout_prob_options=[0.05],
+    dropout_prob_options=[0.1],
     drac_weight_options=[0.1],
 ):
     parameter_settings = named_product(
@@ -185,7 +185,23 @@ def sample_configs(
 
 def write_experiments(base, num_iterations, env_names):
     exps = dict()
-    configs = sample_configs(copy.deepcopy(base))
+    configs = sample_configs(
+        copy.deepcopy(base),
+        sampling_params_options=[PPOSamplingParams(4, 128, 32, 1024)],
+        max_seq_len_options=[32],
+    )
+    configs.update(
+        sample_configs(
+            copy.deepcopy(base),
+            sampling_params_options=[PPOSamplingParams(4, 64, 64, 1024)],
+            max_seq_len_options=[64],
+        ))
+    configs.update(
+        sample_configs(
+            copy.deepcopy(base),
+            sampling_params_options=[PPOSamplingParams(4, 128, 32, 1024)],
+            max_seq_len_options=[16],
+        ))
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
         for exp_name_template, config in configs.items():
