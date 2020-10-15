@@ -22,7 +22,7 @@ run_001_drac:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/wulfebw/experiments/procgen_032
+    local_dir: /home/wulfebw/experiments/procgen_000
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -224,7 +224,7 @@ run_001_drac:
             # https://github.com/ray-project/ray/blob/master/rllib/examples/custom_keras_model.py
             custom_model: custom_impala_cnn_rnn_torch
             # Options for the model.
-            max_seq_len: 10
+            max_seq_len: 55
             use_lstm: true
             lstm_cell_size: 256 # I'm actually using gru; kind of annoying it's called `lstm`.
             # Extra options to pass to custom class
@@ -234,11 +234,17 @@ run_001_drac:
               "policy_fc_size": 256,
               "value_fc_size": 256,
               "prev_action_mode": "concat",
+              "weight_init": "default", # "orthogonal"
               # Stuff that should not go in the model but I'm not sure how else to provide it:
               "data_augmentation_options": {
                 "mode": "drac",
                 "mode_options": {
-                  "drac": {"drac_weight": 0.1, "drac_value_weight": 1, "drac_policy_weight": 1}
+                  "drac": {
+                    "drac_weight": 0.1,
+                    "drac_value_weight": 1,
+                    "drac_policy_weight": 1,
+                    "recurrent_repeat_transform": True
+                  }
                 },
                 "transforms": ["random_translate"],
               },
