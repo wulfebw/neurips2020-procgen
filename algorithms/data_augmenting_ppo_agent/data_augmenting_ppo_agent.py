@@ -60,7 +60,8 @@ def drac_data_augmenting_loss(policy,
                               train_batch,
                               drac_weight,
                               drac_value_weight=1,
-                              drac_policy_weight=1):
+                              drac_policy_weight=1,
+                              recurrent_repeat_transform=True):
     assert len(model.data_augmentation_options["transforms"]) > 0
 
     no_aug_logits, no_aug_state = model.from_batch(train_batch)
@@ -71,8 +72,42 @@ def drac_data_augmenting_loss(policy,
     policy_loss = compute_ppo_loss(policy, dist_class, model, train_batch, no_aug_action_dist,
                                    no_aug_state)
 
-    train_batch["obs"], policy_weight_mask = apply_data_augmentation(
-        train_batch["obs"], model.data_augmentation_options)
+    if policy.is_recurrent() and recurrent_repeat_transform:
+        obs = train_batch["obs"]
+        b_flat, h, w, c = obs.shape
+        t = policy.max_seq_len
+        obs = obs.reshape(-1, t, h, w, c)
+        obs = obs.permute(0, 2, 3, 1, 4)
+        obs = obs.reshape(-1, h, w, c * t)
+
+        obs, policy_weight_mask = apply_data_augmentation(obs, model.data_augmentation_options)
+
+        # Repeat the policy weight mask `t` times so it gets applied to each timestep.
+        policy_weight_mask = policy_weight_mask.repeat_interleave(t)
+
+        debugging = False
+        if debugging:
+            import matplotlib.pyplot as plt
+            num_samples_to_plot = 10
+            for sample in range(num_samples_to_plot):
+                fig, axs = plt.subplots(t, 1, figsize=(4, t * 3))
+                for ti in range(t):
+                    start = ti * 3
+                    end = start + 3
+                    axs[ti].imshow(obs[sample, :, :, start:end].detach().cpu().long().numpy())
+                    axs[ti].set_title(f"sample {sample+1} / {num_samples_to_plot}, timestep: {ti}")
+                fig.subplots_adjust(hspace=0.75)
+                plt.show()
+                plt.close()
+
+        obs = obs.reshape(-1, h, w, t, c)
+        obs = obs.permute(0, 3, 1, 2, 4)
+        obs = obs.reshape(b_flat, h, w, c)
+        train_batch["obs"] = obs
+    else:
+        train_batch["obs"], policy_weight_mask = apply_data_augmentation(
+            train_batch["obs"], model.data_augmentation_options)
+
     model.norm_layers_active = True
     aug_logits, aug_state = model.from_batch(train_batch)
     model.norm_layers_active = False
@@ -252,11 +287,27 @@ def get_policy_class(config):
     return DataAugmentingTorchPolicy
 
 
+def my_validate_config(config):
+    # I guess this is the best way to check for recurrent policy.
+    if config["model"]["use_lstm"]:
+        if config["rollout_fragment_length"] != config["model"]["max_seq_len"]:
+            raise ValueError(
+                "When using a recurrent policy, you should use a `rollout_fragment_length` equal to the `max_seq_len`.\n"
+                "The reason for this is that the minibatches are not shuffled between the `max_seq_len` subsequences.\n"
+                "As a result a single minibatch will have heavily correlated samples.\n"
+                "By setting `rollout_fragment_length` equal to the `max_seq_len` you avoid this problem because\n"
+                "each env sequence only occurs once in the full set of batches.\n"
+                "Here are the values provided:\n"
+                f"rollout_fragment_length: {config['rollout_fragment_length']}\n"
+                f"max_seq_len: {config['model']['max_seq_len']}\n")
+    validate_config(config)
+
+
 DataAugmentingPPOTrainer = build_trainer(name="data_augmenting_ppo_trainer",
                                          default_config=DEFAULT_CONFIG,
                                          default_policy=DataAugmentingTorchPolicy,
                                          get_policy_class=get_policy_class,
                                          make_policy_optimizer=choose_policy_optimizer,
-                                         validate_config=validate_config,
+                                         validate_config=my_validate_config,
                                          after_optimizer_step=update_kl,
                                          after_train_result=warn_about_bad_reward_scales)
