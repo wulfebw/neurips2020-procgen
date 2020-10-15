@@ -38,28 +38,61 @@ def named_product(**items):
     return itertools.starmap(Product, itertools.product(*items.values()))
 
 
+class PPOSamplingParams:
+    def __init__(self, num_workers, num_envs_per_worker, rollout_fragment_length,
+                 sgd_minibatch_size):
+        self.num_workers = num_workers
+        self.num_envs_per_worker = num_envs_per_worker
+        self.rollout_fragment_length = rollout_fragment_length
+        self.sgd_minibatch_size = sgd_minibatch_size
+
+    def __repr__(self):
+        return "_".join([
+            f"num_work_{self.num_workers}",
+            f"num_envs_per_{self.num_envs_per_worker}",
+            f"rollout_len_{self.rollout_fragment_length}",
+            f"minibatch_{self.sgd_minibatch_size}",
+        ])
+
+    @property
+    def num_gpus_per_worker(self):
+        return 0.01
+
+    @property
+    def num_gpus(self):
+        return 1 - (self.num_workers * self.num_gpus_per_worker)
+
+
 def sample_configs(
     base_config,
     learning_rate_options=[0.0005],
     num_sgd_iter_options=[2],
-    sgd_minibatch_size_num_filters_pair_options=[
-        (1628, [32, 64, 64]),
-    ],
-    num_envs_rollout_len_pair_options=[(74, 55)],
-    frame_stack_k_options=[2],
+    num_filters_options=[[32, 64, 64]],
+    lstm_cell_size_options=[256],
+    weight_init_options=["default"],
+    sampling_params_options=[PPOSamplingParams(4, 128, 32, 1024)],
+    max_seq_len_options=[16],
+    frame_stack_k_options=[1],
     transforms_options=[["random_translate"]],
     entropy_coeff_schedule_options=[
-        [[0, 0.01], [4000000, 0.005]],
+        [[0, 0.01]],
     ],
+    dropout_prob_options=[0.05],
+    drac_weight_options=[0.1],
 ):
     parameter_settings = named_product(
         learning_rate=learning_rate_options,
         num_sgd_iter=num_sgd_iter_options,
-        sgd_minibatch_size_num_filters_pair=sgd_minibatch_size_num_filters_pair_options,
-        num_envs_rollout_len_pair=num_envs_rollout_len_pair_options,
+        num_filters=num_filters_options,
+        lstm_cell_size=lstm_cell_size_options,
+        weight_init=weight_init_options,
+        sampling_params=sampling_params_options,
+        max_seq_len=max_seq_len_options,
         frame_stack_k=frame_stack_k_options,
         transforms=transforms_options,
         entropy_coeff_schedule=entropy_coeff_schedule_options,
+        dropout_prob=dropout_prob_options,
+        drac_weight=drac_weight_options,
     )
     configs = dict()
     for params in parameter_settings:
@@ -68,10 +101,15 @@ def sample_configs(
         # Algorithm parameters.
         config["config"]["lr"] = params.learning_rate
         config["config"]["num_sgd_iter"] = params.num_sgd_iter
-        config["config"]["sgd_minibatch_size"] = params.sgd_minibatch_size_num_filters_pair[0]
-        config["config"]["num_envs_per_worker"] = params.num_envs_rollout_len_pair[0]
-        config["config"]["rollout_fragment_length"] = params.num_envs_rollout_len_pair[1]
+        config["config"]["sgd_minibatch_size"] = params.sampling_params.sgd_minibatch_size
+        config["config"]["num_workers"] = params.sampling_params.num_workers
+        config["config"]["num_envs_per_worker"] = params.sampling_params.num_envs_per_worker
+        config["config"]["rollout_fragment_length"] = params.sampling_params.rollout_fragment_length
         config["config"]["entropy_coeff_schedule"] = params.entropy_coeff_schedule
+
+        # All that matters is these gpu resource parameters add to 1.
+        config["config"]["num_gpus_per_worker"] = params.sampling_params.num_gpus_per_worker
+        config["config"]["num_gpus"] = params.sampling_params.num_gpus
 
         # Environment parameters.
         env_wrapper_options = {
@@ -89,26 +127,32 @@ def sample_configs(
         config["config"]["env_config"]["env_wrapper_options"] = env_wrapper_options
 
         # Model parameters.
+        config["config"]["model"]["max_seq_len"] = params.max_seq_len
+        config["config"]["model"]["lstm_cell_size"] = params.lstm_cell_size
+        use_lstm = True  # Fuck you future me.
+        config["config"]["model"]["use_lstm"] = use_lstm
         custom_model_options = {
-            "num_filters": params.sgd_minibatch_size_num_filters_pair[1],
+            "num_filters": params.num_filters,
+            "dropout_prob": params.dropout_prob,
+            "prev_action_mode": "concat",
+            "weight_init": params.weight_init,
             "data_augmentation_options": {
                 "mode": "drac" if len(params.transforms) > 0 else "none",
                 "augmentation_mode": "independent",
                 "mode_options": {
                     "drac": {
-                        "drac_weight": 0.1,
+                        "drac_weight": params.drac_weight,
                         "drac_value_weight": 1,
                         "drac_policy_weight": 1,
+                        "recurrent_repeat_transform": True,
                     }
                 },
                 "transforms": params.transforms,
             },
-            "dropout_prob": 0.05,
             "optimizer_options": {
                 "opt_type": "adam",
                 "weight_decay": 0.0,
             },
-            "prev_action_mode": "concat",
             "intrinsic_reward_options": {
                 "use_noop_penalty": True,
                 "noop_penalty_options": {
@@ -120,13 +164,19 @@ def sample_configs(
 
         exp_name = "_".join([
             "{}_itr_{}",
+            f"{'rnn' if use_lstm else 'cnn'}",
             f"lr_{params.learning_rate}",
-            f"num_sgd_iter_{params.num_sgd_iter}",
-            f"sgd_minibatch_size_{params.sgd_minibatch_size_num_filters_pair[0]}",
-            f"num_envs_{params.num_envs_rollout_len_pair[0]}_rollout_length_{params.num_envs_rollout_len_pair[1]}",
+            f"sgd_itr_{params.num_sgd_iter}",
+            f"filters_{'_'.join(str(v) for v in params.num_filters)}",
+            f"rnn_size_{params.lstm_cell_size}",
+            f"weight_init_{params.weight_init}",
+            f"{params.sampling_params}",
+            f"max_seq_len_{params.max_seq_len}",
+            f"frame_stack_{params.frame_stack_k}",
             "_".join(params.transforms),
             f"ent_sch_{'_'.join(str(v) for y in params.entropy_coeff_schedule for v in y)}",
-            f"num_filters_{'_'.join(str(v) for v in params.sgd_minibatch_size_num_filters_pair[1])}",
+            f"dropout_{params.dropout_prob}",
+            f"drac_{params.drac_weight}",
         ])
         configs[exp_name] = config
 
@@ -162,8 +212,6 @@ def run_experiments(experiments_filepath):
 def main():
     parser = get_parser()
     args = parser.parse_args()
-    if args.env_names == ["all"]:
-        args.env_names = list(procgen.env.ENV_NAMES)
     validate_env_names(args.env_names)
     with open(args.base_exp_filepath) as f:
         base_exp = list(yaml.safe_load(f).values())[0]
