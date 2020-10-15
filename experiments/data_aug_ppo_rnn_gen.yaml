@@ -22,7 +22,7 @@ run_001_drac:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/wulfebw/experiments/procgen_033
+    local_dir: /home/wulfebw/experiments/procgen_000
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -233,6 +233,7 @@ run_001_drac:
               "dropout_prob": 0.05,
               "policy_fc_size": 256,
               "value_fc_size": 256,
+              "policy_activation": "relu",
               "prev_action_mode": "concat",
               "weight_init": "default", # "orthogonal"
               # Stuff that should not go in the model but I'm not sure how else to provide it:
