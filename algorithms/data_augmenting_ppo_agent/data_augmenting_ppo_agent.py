@@ -1,4 +1,5 @@
 import collections
+import logging
 
 import numpy as np
 
@@ -19,9 +20,10 @@ from ray.rllib.policy.torch_policy_template import build_torch_policy
 from ray.rllib.utils import try_import_torch
 from ray.rllib.utils.torch_ops import sequence_mask
 
-torch, nn = try_import_torch()
-
 from algorithms.data_augmentation.data_augmentation import apply_data_augmentation
+
+torch, nn = try_import_torch()
+logger = logging.getLogger(__name__)
 
 
 def compute_ppo_loss(policy, dist_class, model, train_batch, action_dist, state):
@@ -291,7 +293,7 @@ def my_validate_config(config):
     # I guess this is the best way to check for recurrent policy.
     if config["model"]["use_lstm"]:
         if config["rollout_fragment_length"] != config["model"]["max_seq_len"]:
-            raise ValueError(
+            logger.warning(
                 "When using a recurrent policy, you should use a `rollout_fragment_length` equal to the `max_seq_len`.\n"
                 "The reason for this is that the minibatches are not shuffled between the `max_seq_len` subsequences.\n"
                 "As a result a single minibatch will have heavily correlated samples.\n"

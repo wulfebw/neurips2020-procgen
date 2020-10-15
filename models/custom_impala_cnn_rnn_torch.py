@@ -23,6 +23,7 @@ class CustomImpalaCNNRNN(RecurrentTorchModel, nn.Module):
                  policy_fc_size=256,
                  value_fc_size=256,
                  prev_action_mode="none",
+                 weight_init="default",
                  data_augmentation_options={},
                  optimizer_options={},
                  intrinsic_reward_options={}):
@@ -65,6 +66,14 @@ class CustomImpalaCNNRNN(RecurrentTorchModel, nn.Module):
         # Define the actual rnn cell.
         # self.rnn = nn.GRUCell(gru_cell_shape_in, self.rnn_hidden_dim)
         self.rnn = nn.GRU(gru_cell_shape_in, self.rnn_hidden_dim, batch_first=True)
+
+        # Initialize the weights if applicable.
+        if weight_init == "default":
+            pass
+        elif weight_init == "orthogonal":
+            nn.init.orthogonal_(self.rnn.weight_hh_l0)
+        else:
+            raise ValueError(f"Unsupported weight initialization method: {weight_init}")
 
         # Potentially concat the action taken previously.
         logits_fc_shape_in = policy_fc_size

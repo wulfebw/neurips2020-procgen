@@ -234,6 +234,7 @@ run_001_drac:
               "policy_fc_size": 256,
               "value_fc_size": 256,
               "prev_action_mode": "concat",
+              "weight_init": "default", # "orthogonal"
               # Stuff that should not go in the model but I'm not sure how else to provide it:
               "data_augmentation_options": {
                 "mode": "drac",
