@@ -113,7 +113,7 @@ def sample_configs(
 
         # Environment parameters.
         env_wrapper_options = {
-            "frame_stack": True,
+            "frame_stack": True if params.frame_stack_k > 1 else False,
             "frame_stack_options": {
                 "k": params.frame_stack_k
             },
@@ -194,7 +194,7 @@ def write_experiments(base, num_iterations, env_names):
         sample_configs(
             copy.deepcopy(base),
             sampling_params_options=[PPOSamplingParams(4, 64, 64, 1024)],
-            max_seq_len_options=[64],
+            max_seq_len_options=[32],
         ))
     configs.update(
         sample_configs(
