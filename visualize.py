@@ -222,12 +222,13 @@ def run(args, parser):
     if args.deterministic_policy:
         evaluation_config["explore"] = False
         config["explore"] = False
-    evaluation_config["env_config"]["num_levels"] = 1
+    if "env_config" in evaluation_config:
+        evaluation_config["env_config"]["num_levels"] = 1
+        evaluation_config["env_config"]["use_sequential_levels"] = True
+        evaluation_config["env_config"][
+            "start_level"] = 0 if args.level_seed is None else args.level_seed
     config["env_config"]["num_levels"] = 1
-    evaluation_config["env_config"]["use_sequential_levels"] = True
     config["env_config"]["use_sequential_levels"] = True
-    evaluation_config["env_config"][
-        "start_level"] = 0 if args.level_seed is None else args.level_seed
     config["env_config"]["start_level"] = 0 if args.level_seed is None else args.level_seed
     # END ADDED
     config = merge_dicts(config, evaluation_config)
