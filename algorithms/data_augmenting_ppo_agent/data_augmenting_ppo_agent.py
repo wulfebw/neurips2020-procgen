@@ -22,7 +22,9 @@ from ray.rllib.utils import try_import_torch
 from ray.rllib.utils.torch_ops import sequence_mask
 
 from algorithms.data_augmentation.data_augmentation import apply_data_augmentation
-from algorithms.data_augmenting_ppo_agent.ppo_utils import compute_running_mean_and_variance
+from algorithms.data_augmenting_ppo_agent.ppo_utils import (compute_running_mean_and_variance,
+                                                            RunningStat,
+                                                            ExpWeightedMovingAverageStat)
 
 torch, nn = try_import_torch()
 logger = logging.getLogger(__name__)
@@ -245,6 +247,18 @@ def normalize_rewards_mean_std(rewards, eps=1e-8):
     return (rewards - np.mean(rewards)) / (np.std(rewards) + eps)
 
 
+def normalize_rewards_running_mean_std(policy, rewards, eps=1e-8):
+    assert hasattr(policy, "reward_norm_stats")
+    policy.reward_norm_stats.add_all(rewards)
+    return (rewards - policy.reward_norm_stats.mean) / (policy.reward_norm_stats.std + eps)
+
+
+def normalize_rewards_running_return(policy, rewards, eps=1e-8):
+    assert hasattr(policy, "reward_norm_stats")
+    policy.reward_norm_stats.add(np.sum(rewards))
+    return rewards / (policy.reward_norm_stats.std + eps)
+
+
 def reward_normalize_postprocess_sample_batch(policy,
                                               sample_batch,
                                               other_agent_batches=None,
@@ -258,6 +272,12 @@ def reward_normalize_postprocess_sample_batch(policy,
     elif opt["mode"] == "mean_std":
         sample_batch[SampleBatch.REWARDS] = normalize_rewards_mean_std(
             sample_batch[SampleBatch.REWARDS])
+    elif opt["mode"] == "running_mean_std":
+        sample_batch[SampleBatch.REWARDS] = normalize_rewards_running_mean_std(
+            policy, sample_batch[SampleBatch.REWARDS])
+    elif opt["mode"] == "running_return":
+        sample_batch[SampleBatch.REWARDS] = normalize_rewards_running_return(
+            policy, sample_batch[SampleBatch.REWARDS])
     else:
         raise NotImplementedError(f"Reward normalization mode not implemented: {opt['mode']}")
     return sample_batch
@@ -304,6 +324,17 @@ def my_apply_grad_clipping(policy, optimizer, loss):
     return info
 
 
+def after_init_fn(policy, obs_space, action_space, config):
+    setup_mixins(policy, obs_space, action_space, config)
+
+    rew_norm_opt = policy.config["reward_normalization_options"]
+    mode = rew_norm_opt.get("mode", "none")
+    if mode == "running_mean_std":
+        policy.reward_norm_stats = RunningStat(max_count=1000)
+    elif mode == "running_return":
+        policy.reward_norm_stats = ExpWeightedMovingAverageStat(alpha=0.01)
+
+
 # Custom params to be available in the policy.
 DEFAULT_CONFIG["grad_clip_elementwise"] = None
 DEFAULT_CONFIG["reward_normalization_options"] = {"mode": "none"}
@@ -317,7 +348,7 @@ DataAugmentingTorchPolicy = build_torch_policy(
     postprocess_fn=postprocess_sample_batch,
     extra_grad_process_fn=my_apply_grad_clipping,
     before_init=setup_config,
-    after_init=setup_mixins,
+    after_init=after_init_fn,
     mixins=[KLCoeffMixin, ValueNetworkMixin, EntropyCoeffSchedule])
 
 
