@@ -60,6 +60,79 @@ def time_fn(f, runs, *args):
     print(f"{e - s:.6f}")
 
 
+class RunningStat:
+    """Took this from the `Implementation Matters ...` paper.
+
+    https://github.com/MadryLab/implementation-matters
+    """
+    def __init__(self):
+        self.n = 0
+        self.m = 0
+        self.s = 0
+
+    def add(self, v):
+        self.n += 1
+        if self.n == 1:
+            self.m = v
+        else:
+            old_m = self.m
+            self.m = self.m + (v - self.m) / self.n
+            self.s = self.s + (v - old_m) * (v - self.m)
+
+    def add_all(self, arr):
+        for v in arr:
+            self.add(v)
+
+    @property
+    def mean(self):
+        return self.m
+
+    @property
+    def var(self):
+        return self.s / (self.n - 1) if self.n > 1 else self.m**2
+
+    @property
+    def std(self):
+        return np.sqrt(self.var)
+
+    def __repr__(self):
+        return f"Running stat with count: {self.n}, mean: {self.mean:.4f}, variance: {self.var:.4f}"
+
+
+class ExpWeightedMovingAverageStat:
+    """https://en.wikipedia.org/wiki/Moving_average#Exponentially_weighted_moving_variance_and_standard_deviation"""
+    def __init__(self, alpha=0.1):
+        self.alpha = alpha
+        self.n = 0
+        self.m = 0
+        self.v = 0
+
+    def add(self, x):
+        self.n += 1
+
+        if self.n == 1:
+            self.m = x
+        else:
+            delta = x - self.m
+            self.m += self.alpha * delta
+            self.v = (1 - self.alpha) * (self.v + self.alpha * delta**2)
+
+    @property
+    def mean(self):
+        return self.m
+
+    @property
+    def var(self):
+        return self.v
+
+    @property
+    def std(self):
+        return np.sqrt(self.var)
+
+    def __repr__(self):
+        return f"Exp weighted moving avg mean: {self.mean:.4f}, variance: {self.var:.4f}"
+
+
 if __name__ == "__main__":
     np.random.seed(1)
     size = 64
