@@ -16,7 +16,7 @@ run_001_drac:
     # === Stop Conditions ===
     ################################################
     stop:
-        timesteps_total: 6000000
+        timesteps_total: 8000000
 
     ################################################
     # === Settings for Checkpoints ===
@@ -72,7 +72,7 @@ run_001_drac:
               "mixed_grayscale_color_options": {
                 "num_prev_frames": 1
               },
-              "normalize_reward": True,
+              "normalize_reward": False,
               "normalize_reward_options": {
                 "discount": 0.999
               }
@@ -152,7 +152,7 @@ run_001_drac:
 
         # custom options
         reward_normalization_options: {
-          "mode": "env_rew_norm"
+          "mode": "none"
         }
 
         # Whether to attempt to continue training if a worker crashes. The number
@@ -232,7 +232,7 @@ run_001_drac:
             custom_model: custom_impala_cnn_torch
             # Extra options to pass to custom class
             custom_options: {
-              "num_filters": [16, 32, 32],
+              "num_filters": [36, 64, 64],
               "data_augmentation_options": {
                 "mode": "drac",
                 "mode_options": {
