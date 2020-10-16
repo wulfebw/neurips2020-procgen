@@ -2,6 +2,7 @@ import collections
 import logging
 
 import numpy as np
+import scipy.signal as signal
 
 import ray
 from ray.rllib.agents.a3c.a3c_torch_policy import apply_grad_clipping
@@ -21,6 +22,7 @@ from ray.rllib.utils import try_import_torch
 from ray.rllib.utils.torch_ops import sequence_mask
 
 from algorithms.data_augmentation.data_augmentation import apply_data_augmentation
+from algorithms.data_augmenting_ppo_agent.ppo_utils import compute_running_mean_and_variance
 
 torch, nn = try_import_torch()
 logger = logging.getLogger(__name__)
@@ -215,12 +217,61 @@ def apply_noop_penalty(sample_batch, options):
     return sample_batch
 
 
-def intrinsic_reward_postprocess_fn(policy, sample_batch, other_agent_batches=None, episode=None):
+def intrinsic_reward_postprocess_sample_batch(policy,
+                                              sample_batch,
+                                              other_agent_batches=None,
+                                              episode=None):
     opt = policy.model.intrinsic_reward_options
     if opt.get("use_noop_penalty", False):
         assert "noop_penalty_options" in opt
         sample_batch = apply_noop_penalty(sample_batch, opt["noop_penalty_options"])
+    return sample_batch
 
+
+def normalize_rewards_openai(rewards, discount, eps=1e-8):
+    """Normalizes based on something like the discounted return, but honestly no idea.
+
+    It's from this paper: https://arxiv.org/pdf/2005.12729.pdf, which says it got it
+    from the openai baselines implementation, but I have no idea why you would do this.
+    """
+    a = [1, -discount]
+    b = [1]
+    discounted_return_so_far = signal.lfilter(b, a, x=rewards)
+    _, variances = compute_running_mean_and_variance(discounted_return_so_far)
+    return rewards / (np.sqrt(variances) + eps)
+
+
+def normalize_rewards_mean_std(rewards, eps=1e-8):
+    return (rewards - np.mean(rewards)) / (np.std(rewards) + eps)
+
+
+def reward_normalize_postprocess_sample_batch(policy,
+                                              sample_batch,
+                                              other_agent_batches=None,
+                                              episode=None):
+    opt = policy.config.get("reward_normalization_options", {"mode": "none"})
+    if opt["mode"] == "none":
+        pass
+    elif opt["mode"] == "openai":
+        sample_batch[SampleBatch.REWARDS] = normalize_rewards_openai(
+            sample_batch[SampleBatch.REWARDS], policy.config["gamma"])
+    elif opt["mode"] == "mean_std":
+        sample_batch[SampleBatch.REWARDS] = normalize_rewards_mean_std(
+            sample_batch[SampleBatch.REWARDS])
+    else:
+        raise NotImplementedError(f"Reward normalization mode not implemented: {opt['mode']}")
+    return sample_batch
+
+
+def postprocess_sample_batch(policy, sample_batch, other_agent_batches=None, episode=None):
+    # In theory you might want to apply to intrinsic rewards _after_ normalizing so that you can
+    # use the same reward values across environments. In practice, using the same value across
+    # envs works well, and doing it beforehand means you don't have to change the intrinsic
+    # reward value based on whether you're normalizing the rewards.
+    sample_batch = intrinsic_reward_postprocess_sample_batch(
+        policy, sample_batch, other_agent_batches=other_agent_batches, episode=episode)
+    sample_batch = reward_normalize_postprocess_sample_batch(
+        policy, sample_batch, other_agent_batches=other_agent_batches, episode=episode)
     return postprocess_ppo_gae(policy, sample_batch, other_agent_batches, episode)
 
 
@@ -236,15 +287,24 @@ def compute_global_grad_norm(param_groups, norm_type=2, device="cpu"):
 def apply_grad_clipping_elementwise(policy, optimizer, loss):
     info = {}
     if policy.config.get("grad_clip_elementwise", None) is not None:
-        info["initial_global_grad_norm"] = compute_global_grad_norm(optimizer.param_groups)
+        info["before_ele_clip_global_grad_norm"] = compute_global_grad_norm(optimizer.param_groups)
         for param_group in optimizer.param_groups:
             nn.utils.clip_grad_value_(param_group["params"], policy.config["grad_clip_elementwise"])
-        info["final_global_grad_norm"] = compute_global_grad_norm(optimizer.param_groups)
+        info["after_ele_clip_global_grad_norm"] = compute_global_grad_norm(optimizer.param_groups)
+    return info
+
+
+def my_apply_grad_clipping(policy, optimizer, loss):
+    # Apply the gradient clipping elementwise first to prevent the larger gradients at the
+    # end of the network from dominating after clipping the gradients by the global norm.
+    info = apply_grad_clipping_elementwise(policy, optimizer, loss)
+    info.update(apply_grad_clipping(policy, optimizer, loss))
     return info
 
 
 # Custom params to be available in the policy.
 DEFAULT_CONFIG["grad_clip_elementwise"] = None
+DEFAULT_CONFIG["reward_normalization_options"] = {"mode": "none"}
 
 DataAugmentingTorchPolicy = build_torch_policy(
     name="DataAugmentingTorchPolicy",
@@ -252,8 +312,8 @@ DataAugmentingTorchPolicy = build_torch_policy(
     loss_fn=data_augmenting_loss,
     stats_fn=data_augmenting_stats,
     extra_action_out_fn=vf_preds_fetches,
-    postprocess_fn=intrinsic_reward_postprocess_fn,
-    extra_grad_process_fn=apply_grad_clipping_elementwise,
+    postprocess_fn=postprocess_sample_batch,
+    extra_grad_process_fn=my_apply_grad_clipping,
     before_init=setup_config,
     after_init=setup_mixins,
     mixins=[KLCoeffMixin, ValueNetworkMixin, EntropyCoeffSchedule])
