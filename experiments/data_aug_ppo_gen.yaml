@@ -22,7 +22,7 @@ run_001_drac:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/wulfebw/experiments/procgen_000
+    local_dir: /home/ubuntu/experiments/procgen_005
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
