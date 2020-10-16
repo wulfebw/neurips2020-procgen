@@ -101,6 +101,7 @@ def set_ppo_algorithm_params(config, params):
     config["config"]["num_envs_per_worker"] = params.sampling_params.num_envs_per_worker
     config["config"]["rollout_fragment_length"] = params.sampling_params.rollout_fragment_length
     config["config"]["entropy_coeff_schedule"] = params.entropy_coeff_schedule
+    config["config"]["reward_normalization_options"] = {"mode": params.reward_normalization_mode}
 
     # All that matters is these gpu resource parameters add to 1.
     config["config"]["num_gpus_per_worker"] = params.sampling_params.num_gpus_per_worker
@@ -157,6 +158,7 @@ def get_ppo_exp_name(params, is_recurrent):
         f"sgd_itr_{params.num_sgd_iter}",
         f"filters_{'_'.join(str(v) for v in params.num_filters)}",
         f"{params.sampling_params}",
+        f"rew_norm_{params.reward_normalization_mode}",
         "_".join(params.transforms),
         f"ent_sch_{'_'.join(str(v) for y in params.entropy_coeff_schedule for v in y)}",
         f"dropout_{params.dropout_prob}",
@@ -186,6 +188,7 @@ def sample_configs(
     weight_init_options=["default"],
     sampling_params_options=[PPOSamplingParams(4, 256, 16, 1024)],
     max_seq_len_options=[16],
+    reward_normalization_mode_options=["none"],
     frame_stack_k_options=[1],
     transforms_options=[["random_translate"]],
     entropy_coeff_schedule_options=[
@@ -203,6 +206,7 @@ def sample_configs(
         weight_init=weight_init_options,
         sampling_params=sampling_params_options,
         max_seq_len=max_seq_len_options,
+        reward_normalization_mode=reward_normalization_mode_options,
         frame_stack_k=frame_stack_k_options,
         transforms=transforms_options,
         entropy_coeff_schedule=entropy_coeff_schedule_options,

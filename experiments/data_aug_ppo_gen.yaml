@@ -22,7 +22,7 @@ run_001_drac:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/ubuntu/experiments/procgen_001
+    local_dir: /home/wulfebw/experiments/procgen_000
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -95,11 +95,11 @@ run_001_drac:
         num_sgd_iter: 2
         # Total SGD batch size across all devices for SGD. This defines the
         # minibatch size within each epoch.
-        sgd_minibatch_size: 2035 # 1760 # 880 # 2048 # 8 minibatches per epoch
+        sgd_minibatch_size: 1024 # 1760 # 880 # 2048 # 8 minibatches per epoch
         # Training batch size, if applicable. Should be >= rollout_fragment_length.
         # Samples batches will be concatenated together to a batch of this size,
         # which is then passed to SGD.
-        train_batch_size: 16280 # 14080 # 16384 # 256 * 64
+        train_batch_size: 16384 # 14080 # 16384 # 256 * 64
         # Initial coefficient for KL divergence.
         kl_coeff: 0.0
         # Target value for KL divergence.
@@ -117,7 +117,8 @@ run_001_drac:
         # If specified, clip the global norm of gradients by this amount.
         # there's some bug related to gradient clipping, so if this is set it causes an error
         # it might have to do with my install of everything
-        # grad_clip: 0.5
+        grad_clip: 10
+        grad_clip_elementwise: 1.0
         # Which observation filter to apply to the observation.
         observation_filter: NoFilter
         # Share layers for value function. If you set this to True, it's important
@@ -144,6 +145,11 @@ run_001_drac:
         clip_actions: True
         # Whether to use rllib or deepmind preprocessors by default
         preprocessor_pref: deepmind
+
+        # custom options
+        reward_normalization_options: {
+          "mode": "none"
+        }
 
         # Whether to attempt to continue training if a worker crashes. The number
         # of currently healthy workers is reported as the "num_healthy_workers"
@@ -222,7 +228,7 @@ run_001_drac:
             custom_model: custom_impala_cnn_torch
             # Extra options to pass to custom class
             custom_options: {
-              "num_filters": [24, 48, 48],
+              "num_filters": [16, 32, 32],
               "data_augmentation_options": {
                 "mode": "drac",
                 "mode_options": {
@@ -230,7 +236,7 @@ run_001_drac:
                 },
                 "transforms": ["random_translate"],
               },
-              "dropout_prob": 0.05,
+              "dropout_prob": 0.1,
               "optimizer_options": {
                 "opt_type": "adam",
                 "momentum": 0.9
@@ -256,7 +262,7 @@ run_001_drac:
         # Number of environments to evaluate vectorwise per worker. This enables
         # model inference batching, which can improve performance for inference
         # bottlenecked workloads.
-        num_envs_per_worker: 74 # 64 # 16 # 12
+        num_envs_per_worker: 128 # 64 # 16 # 12
 
         # Divide episodes into fragments of this many steps each during rollouts.
         # Sample batches of this size are collected from rollout workers and
@@ -273,7 +279,7 @@ run_001_drac:
         #
         # The dataflow here can vary per algorithm. For example, PPO further
         # divides the train batch into minibatches for multi-epoch SGD.
-        rollout_fragment_length: 55 # 256
+        rollout_fragment_length: 32 # 256
 
         # Whether to rollout "complete_episodes" or "truncate_episodes" to
         # `rollout_fragment_length` length unrolls. Episode truncation guarantees
@@ -350,7 +356,7 @@ run_001_drac:
         # === Evaluation Settings ===
         ################################################
         ################################################
-        evaluation_interval: 425 # 568 # unfortunate to have to hardcode this, but not sure how better to do it.
+        evaluation_interval: 480 # 568 # unfortunate to have to hardcode this, but not sure how better to do it.
         evaluation_num_episodes: 2000
         evaluation_num_workers: 0
         evaluation_config: {"env_config": {"num_levels": 0, "env_wrapper_options": {"normalize_reward": False}}}
