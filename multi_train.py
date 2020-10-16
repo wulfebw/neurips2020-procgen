@@ -105,6 +105,8 @@ def set_ppo_algorithm_params(config, params):
     config["config"]["rollout_fragment_length"] = params.sampling_params.rollout_fragment_length
     config["config"]["entropy_coeff_schedule"] = params.entropy_coeff_schedule
     config["config"]["reward_normalization_options"] = {"mode": params.reward_normalization_mode}
+    config["config"]["grad_clip"] = params.grad_clip_pair[0]
+    config["config"]["grad_clip_elementwise"] = params.grad_clip_pair[1]
 
     # All that matters is these gpu resource parameters add to 1.
     config["config"]["num_gpus_per_worker"] = params.sampling_params.num_gpus_per_worker
@@ -146,7 +148,9 @@ def set_ppo_model_params(config, params, is_recurrent):
             "noop_penalty_options": {
                 "reward": -0.1
             }
-        }
+        },
+        "fc_activation": params.fc_activation,
+        "fc_size": params.fc_size,
     }
     config["config"]["model"]["custom_options"] = custom_model_options
     return config
@@ -160,12 +164,15 @@ def get_ppo_exp_name(params, is_recurrent):
         f"lr_{params.learning_rate}",
         f"sgd_itr_{params.num_sgd_iter}",
         f"filters_{'_'.join(str(v) for v in params.num_filters)}",
+        f"fc_size_{params.fc_size}",
         f"{params.sampling_params}",
-        f"rew_norm_{params.reward_normalization_mode}",
         "_".join(params.transforms),
         f"ent_sch_{'_'.join(str(v) for y in params.entropy_coeff_schedule for v in y)}",
         f"dropout_{params.dropout_prob}",
         f"drac_{params.drac_weight}",
+        f"grad_clip_{params.grad_clip_pair[0]}_{params.grad_clip_pair[1]}",
+        f"act_fn_{params.fc_activation}",
+        f"weight_init_{params.weight_init}",
     ])
 
     # Add the params that only apply in the recurrent or non-recurrent cases.
@@ -186,17 +193,20 @@ def sample_configs(
     base_config,
     learning_rate_options=[0.0005],
     num_sgd_iter_options=[2],
-    num_filters_options=[[24, 48, 48]],
+    num_filters_options=[[32, 48, 64]],
+    fc_size_options=[256],
     lstm_cell_size_options=[256],
     weight_init_options=["default"],
     sampling_params_options=[PPOSamplingParams(4, 64, 64, 1024)],
     max_seq_len_options=[16],
-    reward_normalization_mode_options=["running_return", "env_rew_norm"],
+    reward_normalization_mode_options=["running_return"],
     frame_stack_k_options=[2],
     transforms_options=[["random_translate"]],
     entropy_coeff_schedule_options=[
         [[0, 0.01]],
     ],
+    fc_activation_options=["relu"],
+    grad_clip_pair_options=[(10, 1.0)],
     dropout_prob_options=[0.1],
     drac_weight_options=[0.1],
 ):
@@ -205,6 +215,7 @@ def sample_configs(
         learning_rate=learning_rate_options,
         num_sgd_iter=num_sgd_iter_options,
         num_filters=num_filters_options,
+        fc_size=fc_size_options,
         lstm_cell_size=lstm_cell_size_options,
         weight_init=weight_init_options,
         sampling_params=sampling_params_options,
@@ -213,6 +224,8 @@ def sample_configs(
         frame_stack_k=frame_stack_k_options,
         transforms=transforms_options,
         entropy_coeff_schedule=entropy_coeff_schedule_options,
+        fc_activation=fc_activation_options,
+        grad_clip_pair=grad_clip_pair_options,
         dropout_prob=dropout_prob_options,
         drac_weight=drac_weight_options,
     )
@@ -230,6 +243,14 @@ def sample_configs(
 def write_experiments(base, num_iterations, env_names):
     exps = dict()
     configs = sample_configs(copy.deepcopy(base))
+    configs.update(sample_configs(copy.deepcopy(base), frame_stack_k_options=[3]))
+    configs.update(sample_configs(copy.deepcopy(base), weight_init_options=["orthogonal"]))
+    configs.update(sample_configs(copy.deepcopy(base), fc_activation_options=["tanh"]))
+    configs.update(sample_configs(copy.deepcopy(base), grad_clip_pair_options=[(1.0, 1.0)]))
+    configs.update(sample_configs(copy.deepcopy(base), fc_size_options=[512]))
+    configs.update(
+        sample_configs(copy.deepcopy(base),
+                       sampling_params_options=[PPOSamplingParams(4, 128, 32, 1024)]))
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
         for exp_name_template, config in configs.items():
