@@ -259,10 +259,16 @@ def normalize_rewards_running_return(policy, rewards, eps=1e-8):
     return rewards / (policy.reward_norm_stats.std + eps)
 
 
+def normalize_rewards_env_return(rewards, infos, eps=1e-8):
+    return_stds = np.array([info["rew_norm_g"] for info in infos])
+    return rewards / (return_stds + eps)
+
+
 def reward_normalize_postprocess_sample_batch(policy,
                                               sample_batch,
                                               other_agent_batches=None,
                                               episode=None):
+
     opt = policy.config.get("reward_normalization_options", {"mode": "none"})
     if opt["mode"] == "none":
         pass
@@ -278,6 +284,9 @@ def reward_normalize_postprocess_sample_batch(policy,
     elif opt["mode"] == "running_return":
         sample_batch[SampleBatch.REWARDS] = normalize_rewards_running_return(
             policy, sample_batch[SampleBatch.REWARDS])
+    elif opt["mode"] == "env_rew_norm":
+        sample_batch[SampleBatch.REWARDS] = normalize_rewards_env_return(
+            sample_batch[SampleBatch.REWARDS], sample_batch[SampleBatch.INFOS])
     else:
         raise NotImplementedError(f"Reward normalization mode not implemented: {opt['mode']}")
     return sample_batch

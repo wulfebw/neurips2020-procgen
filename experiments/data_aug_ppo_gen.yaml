@@ -36,7 +36,7 @@ run_001_drac:
         ################################################
         env_config:
             # Name of the procgen environment to train on # Note, that this parameter will be overriden during the evaluation by the AIcrowd evaluators.
-            env_name: maze # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
+            env_name: starpilot # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
             # The number of unique levels that can be generated. Set to 0 to use unlimited levels
             num_levels: 200
             # The lowest seed that will be used to generated levels. 'start_level' and 'num_levels' fully specify the set of possible levels
@@ -71,6 +71,10 @@ run_001_drac:
               "mixed_grayscale_color": False,
               "mixed_grayscale_color_options": {
                 "num_prev_frames": 1
+              },
+              "normalize_reward": True,
+              "normalize_reward_options": {
+                "discount": 0.999
               }
             }
 
@@ -148,7 +152,7 @@ run_001_drac:
 
         # custom options
         reward_normalization_options: {
-          "mode": "none"
+          "mode": "env_rew_norm"
         }
 
         # Whether to attempt to continue training if a worker crashes. The number
