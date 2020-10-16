@@ -298,8 +298,9 @@ def my_apply_grad_clipping(policy, optimizer, loss):
     # Apply the gradient clipping elementwise first to prevent the larger gradients at the
     # end of the network from dominating after clipping the gradients by the global norm.
     info = apply_grad_clipping_elementwise(policy, optimizer, loss)
-    final_grad_global_norm = apply_grad_clipping(policy, optimizer, loss)["grad_gnorm"]
-    info["final_grad_global_norm"] = final_grad_global_norm.to("cpu")
+    global_info = apply_grad_clipping(policy, optimizer, loss)
+    if "grad_gnorm" in global_info:
+        info["final_grad_global_norm"] = global_info["grad_gnorm"].to("cpu")
     return info
 
 
