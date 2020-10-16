@@ -152,7 +152,7 @@ run_001_drac:
 
         # custom options
         reward_normalization_options: {
-          "mode": "none"
+          "mode": "running_return"
         }
 
         # Whether to attempt to continue training if a worker crashes. The number
@@ -233,6 +233,7 @@ run_001_drac:
             # Extra options to pass to custom class
             custom_options: {
               "num_filters": [36, 64, 64],
+              "weight_init": "default",
               "data_augmentation_options": {
                 "mode": "drac",
                 "mode_options": {
@@ -251,7 +252,9 @@ run_001_drac:
                 "noop_penalty_options": {
                   "reward": -0.1
                 }
-              }
+              },
+              "fc_activation": "relu",
+              "fc_size": 256,
             }
 
         ################################################

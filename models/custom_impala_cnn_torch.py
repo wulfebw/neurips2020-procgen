@@ -9,59 +9,47 @@ torch, nn = try_import_torch()
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, channels, batch_norm):
+    def __init__(self, channels):
         super().__init__()
-        self._batch_norm = batch_norm
         self.conv0 = nn.Conv2d(in_channels=channels,
                                out_channels=channels,
                                kernel_size=3,
                                padding=1)
-        self.conv0_bn = nn.BatchNorm2d(channels)
         self.conv1 = nn.Conv2d(in_channels=channels,
                                out_channels=channels,
                                kernel_size=3,
                                padding=1)
-        self.conv1_bn = nn.BatchNorm2d(channels)
 
     def forward(self, x):
         inputs = x
         x = nn.functional.relu(x)
         x = self.conv0(x)
         x = nn.functional.relu(x)
-        if self._batch_norm:
-            x = self.conv0_bn(x)
         x = self.conv1(x)
         x = x + inputs
-        if self._batch_norm:
-            x = self.conv1_bn(x)
         return x
 
 
 class ConvSequence(nn.Module):
-    def __init__(self, input_shape, out_channels, batch_norm=False, dropout_prob=0.0):
+    def __init__(self, input_shape, out_channels, dropout_prob=0.0):
         super().__init__()
         self._input_shape = input_shape
         self._out_channels = out_channels
-        self._batch_norm = batch_norm
         self._dropout_prob = dropout_prob
-        assert not batch_norm and dropout_prob > 0
 
         self.conv = nn.Conv2d(in_channels=self._input_shape[0],
                               out_channels=self._out_channels,
                               kernel_size=3,
                               padding=1)
-        self.res_block0 = ResidualBlock(self._out_channels, batch_norm=batch_norm)
-        self.res_block1 = ResidualBlock(self._out_channels, batch_norm=batch_norm)
+        self.res_block0 = ResidualBlock(self._out_channels)
+        self.res_block1 = ResidualBlock(self._out_channels)
 
-        self.conv_bn = nn.BatchNorm2d(self._out_channels)
         self.dropout_layer = nn.Dropout2d(self._dropout_prob)
 
     def forward(self, x):
         x = self.conv(x)
         x = nn.functional.max_pool2d(x, kernel_size=3, stride=2, padding=1)
-        if self._batch_norm:
-            x = self.conv_bn(x)
-        elif self._dropout_prob > 0:
+        if self._dropout_prob > 0:
             x = self.dropout_layer(x)
         x = self.res_block0(x)
         x = self.res_block1(x)
@@ -74,15 +62,24 @@ class ConvSequence(nn.Module):
 
     def set_norm_layer_mode(self, mode):
         if mode == "train":
-            if self._batch_norm:
-                self.conv_bn.train()
-            elif self._dropout_prob > 0:
+            if self._dropout_prob > 0:
                 self.dropout_layer.train()
         elif mode == "eval":
-            if self._batch_norm:
-                self.conv_bn.eval()
-            elif self._dropout_prob > 0:
+            if self._dropout_prob > 0:
                 self.dropout_layer.eval()
+
+
+def initialize_parameters(params, mode):
+    if mode == "default":
+        pass
+    elif mode == "orthogonal":
+        for name, param in params:
+            if len(param.shape) >= 2:
+                torch.nn.init.orthogonal_(param)
+            elif "bias" in name:
+                param.data.fill_(0)
+    else:
+        raise ValueError(f"Unsupported initialization: {weight_init}")
 
 
 class CustomImpalaCNN(TorchModelV2, nn.Module):
@@ -97,6 +94,9 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
                  dropout_prob=0.0,
                  optimizer_options={},
                  prev_action_mode="none",
+                 fc_activation="relu",
+                 fc_size=256,
+                 weight_init="default",
                  intrinsic_reward_options={}):
         TorchModelV2.__init__(self, obs_space, action_space, num_outputs, model_config, name)
         nn.Module.__init__(self)
@@ -122,18 +122,27 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
         self.conv_seqs = nn.ModuleList(conv_seqs)
 
         hidden_fc_shape_in = shape[0] * shape[1] * shape[2]
-        logits_fc_shape_in = 256
-        value_fc_shape_in = 256
+        logits_fc_shape_in = fc_size
+        value_fc_shape_in = fc_size
         if prev_action_mode == "concat":
             hidden_fc_shape_in = shape[0] * shape[1] * shape[2] + self.action_space.n
             logits_fc_shape_in = logits_fc_shape_in + self.action_space.n
             value_fc_shape_in = value_fc_shape_in + self.action_space.n
 
-        self.hidden_fc = nn.Linear(in_features=hidden_fc_shape_in, out_features=256)
+        self.hidden_fc = nn.Linear(in_features=hidden_fc_shape_in, out_features=fc_size)
         self.logits_fc = nn.Linear(in_features=logits_fc_shape_in, out_features=num_outputs)
         self.value_fc = nn.Linear(in_features=value_fc_shape_in, out_features=1)
 
         self.dropout_fc = nn.Dropout(self.dropout_prob)
+
+        if fc_activation == "relu":
+            self.fc_activation = nn.functional.relu
+        elif fc_activation == "tanh":
+            self.fc_activation = nn.functional.tanh
+        else:
+            raise ValueError(f"Unsupported fc activation: {fc_activation}")
+
+        initialize_parameters(self.named_parameters(), weight_init)
 
         # Set externally during training.
         self.norm_layers_active = False
@@ -152,7 +161,7 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
         for conv_seq in self.conv_seqs:
             x = conv_seq(x)
         x = torch.flatten(x, start_dim=1)
-        x = nn.functional.relu(x)
+        x = self.fc_activation(x)
 
         if self.prev_action_mode == "concat":
             a = input_dict["prev_actions"]
@@ -165,7 +174,7 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
             x = torch.cat((x, a), axis=-1)
 
         x = self.hidden_fc(x)
-        x = nn.functional.relu(x)
+        x = self.fc_activation(x)
         x = self.dropout_fc(x)
 
         if self.prev_action_mode == "concat":
@@ -240,9 +249,7 @@ class SplitImpalaCNN(TorchModelV2, nn.Module):
         value_conv_seqs = []
         value_conv_shape = shape
         for out_channels in value_filters:
-            conv_seq = ConvSequence(value_conv_shape,
-                                    out_channels,
-                                    batch_norm=value_options.get("batch_norm", False))
+            conv_seq = ConvSequence(value_conv_shape, out_channels)
             value_conv_shape = conv_seq.get_output_shape()
             value_conv_seqs.append(conv_seq)
         self.value_conv_seqs = nn.ModuleList(value_conv_seqs)
@@ -314,7 +321,7 @@ class SplitImpalaCNN(TorchModelV2, nn.Module):
         string = prefix + f" current: {self.cur_mem / 10e9:0.2f}GB, change: {change / 10e9:0.2f}GB"
         print(string)
 
-    def in_rollout(self, x, threshold=512):
+    def in_rollout(self, x, threshold=300):
         # Another hack.
         # Need to know if the model is being used for rollouts or for training.
         # The training state isn't set by the rllib (or is set to training=True on purpose),
