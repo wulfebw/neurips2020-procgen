@@ -105,7 +105,7 @@ class ExpWeightedMovingAverageStat:
         self.alpha = alpha
         self.n = 0
         self.m = 0
-        self.v = 0
+        self.v = 1 # Start this at 1 to avoid problems at the start.
 
     def add(self, x):
         self.n += 1

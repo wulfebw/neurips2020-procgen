@@ -10,6 +10,7 @@ from envs.frame_stack_phase_correlation import FrameStackPhaseCorrelation
 from envs.grayscale import Grayscale
 from envs.mixed_grayscale_color_frame_stack import MixedGrayscaleColorFrameStack
 from envs.procgen_env_wrapper import ProcgenEnvWrapper
+from envs.reward_normalization_wrapper import RewardNormalizationWrapper
 
 
 def wrap_procgen(env,
@@ -20,6 +21,7 @@ def wrap_procgen(env,
                  frame_stack_phase_correlation=False,
                  frame_stack_phase_correlation_options={},
                  normalize_reward=False,
+                 normalize_reward_options={},
                  grayscale=False,
                  mixed_grayscale_color=False,
                  mixed_grayscale_color_options={}):
@@ -41,10 +43,7 @@ def wrap_procgen(env,
         assert not frame_stack
         env = MixedGrayscaleColorFrameStack(env, **mixed_grayscale_color_options)
     if normalize_reward:
-        raise NotImplementedError("Use built in min/max returns")
-        env_max_return = PROCGEN_MAX_RETURN[env_name]
-        env_reward_scale = 10.0 / env_max_return
-        env = TransformReward(env, lambda r: r * env_reward_scale)
+        env = RewardNormalizationWrapper(env, **normalize_reward_options)
     return env
 
 

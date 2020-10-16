@@ -81,7 +81,10 @@ def set_env_params(config, params, is_recurrent):
             "k": params.frame_stack_k
         },
         "frame_diff": False,
-        "normalize_reward": False,
+        "normalize_reward": True if params.reward_normalization_mode == "env_rew_norm" else False,
+        "normalize_reward_options": {
+            "discount": config["config"]["gamma"]
+        },
         "grayscale": False,
         "mixed_grayscale_color": False,
         "mixed_grayscale_color_options": {
@@ -186,10 +189,10 @@ def sample_configs(
     num_filters_options=[[24, 48, 48]],
     lstm_cell_size_options=[256],
     weight_init_options=["default"],
-    sampling_params_options=[PPOSamplingParams(4, 256, 16, 1024)],
+    sampling_params_options=[PPOSamplingParams(4, 64, 64, 1024)],
     max_seq_len_options=[16],
-    reward_normalization_mode_options=["none"],
-    frame_stack_k_options=[1],
+    reward_normalization_mode_options=["running_return", "env_rew_norm"],
+    frame_stack_k_options=[2],
     transforms_options=[["random_translate"]],
     entropy_coeff_schedule_options=[
         [[0, 0.01]],
