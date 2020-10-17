@@ -350,16 +350,18 @@ def after_init_fn(policy, obs_space, action_space, config):
     setup_mixins(policy, obs_space, action_space, config)
 
     rew_norm_opt = policy.config["reward_normalization_options"]
-    mode = rew_norm_opt.get("mode", "none")
-    if mode == "running_mean_std":
+    if rew_norm_opt["mode"] == "running_mean_std":
         policy.reward_norm_stats = RunningStat(max_count=1000)
-    elif mode == "running_return":
-        policy.reward_norm_stats = ExpWeightedMovingAverageStat(alpha=0.01)
+    elif rew_norm_opt["mode"] == "running_return":
+        policy.reward_norm_stats = ExpWeightedMovingAverageStat(alpha=rew_norm_opt["alpha"])
 
 
 # Custom params to be available in the policy.
+# The code above assumes these fields exist in the config, so if you remove one make sure to
+# reflect that change above. The reason for this is that I don't want to hardcode defaults in
+# the code directly.
 DEFAULT_CONFIG["grad_clip_elementwise"] = None
-DEFAULT_CONFIG["reward_normalization_options"] = {"mode": "none"}
+DEFAULT_CONFIG["reward_normalization_options"] = {"mode": "none", "alpha": 0.01}
 
 DataAugmentingTorchPolicy = build_torch_policy(
     name="DataAugmentingTorchPolicy",

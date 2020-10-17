@@ -22,7 +22,7 @@ run_001_drac:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/ubuntu/experiments/procgen_005
+    local_dir: /home/wulfebw/experiments/procgen_000
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -99,7 +99,7 @@ run_001_drac:
         num_sgd_iter: 2
         # Total SGD batch size across all devices for SGD. This defines the
         # minibatch size within each epoch.
-        sgd_minibatch_size: 1024 # 1760 # 880 # 2048 # 8 minibatches per epoch
+        sgd_minibatch_size: 128 # 1024 # 1760 # 880 # 2048 # 8 minibatches per epoch
         # Training batch size, if applicable. Should be >= rollout_fragment_length.
         # Samples batches will be concatenated together to a batch of this size,
         # which is then passed to SGD.
@@ -152,7 +152,8 @@ run_001_drac:
 
         # custom options
         reward_normalization_options: {
-          "mode": "running_return"
+          "mode": "running_return",
+          "alpha": 0.01,
         }
 
         # Whether to attempt to continue training if a worker crashes. The number
