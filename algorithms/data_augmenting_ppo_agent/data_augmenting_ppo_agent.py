@@ -161,10 +161,23 @@ def data_augmenting_loss(policy, model, dist_class, train_batch):
         raise ValueError(f"Invalid data augmenting mode: {model.data_augmentation_options['mode']}")
 
 
+def suppress_nan_and_inf(d, replacement=0):
+    for k, v in d.items():
+        if torch.is_tensor(v):
+            if torch.any(torch.isnan(v)) or torch.any(torch.isinf(v)):
+                d[k] = replacement
+                print("Suppressing inf or nan stat!")
+        elif np.any(np.isnan(v)) or np.any(np.isinf(v)):
+            d[k] = replacement
+            print("Suppressing inf or nan stat!")
+    return d
+
+
 def data_augmenting_stats(policy, train_batch):
     stats = kl_and_loss_stats(policy, train_batch)
     if hasattr(policy.loss_obj, "data_aug_loss"):
         stats["drac_loss_unweighted"] = policy.loss_obj.data_aug_loss
+    stats = suppress_nan_and_inf(stats)
     return stats
 
 
