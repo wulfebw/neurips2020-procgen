@@ -233,8 +233,12 @@ def apply_noop_penalty(sample_batch, options):
 
 
 def apply_state_revisitation_penalty(sample_batch, options):
+    infos = sample_batch[SampleBatch.INFOS]
+    if len(infos) == 0 or "occupancy_count" not in infos[0]:
+        return sample_batch
+
     reward_value = options["reward"]
-    counts = [info["occupancy_count"] for info in sample_batch[SampleBatch.INFOS]]
+    counts = [info["occupancy_count"] for info in infos]
     dones = sample_batch[SampleBatch.DONES]
     rewards = (np.array(counts) - 1) * reward_value
     # Don't apply the reward on a terminal timestep.

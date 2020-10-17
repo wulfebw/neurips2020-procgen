@@ -111,6 +111,36 @@ class PPOGradClipParams:
             raise ValueError("Unsupported mode: {self.mode}")
 
 
+class IntrinsicRewardParams:
+    def __init__(
+        self,
+        use_noop_penalty=True,
+        noop_penalty_options={"reward": -0.1},
+        use_state_revisitation_penalty=False,
+        state_revisitation_penalty_options={"reward": -0.01},
+    ):
+        self.use_noop_penalty = use_noop_penalty
+        self.noop_penalty_options = noop_penalty_options
+        self.use_state_revisitation_penalty = use_state_revisitation_penalty
+        self.state_revisitation_penalty_options = state_revisitation_penalty_options
+
+    def options(self):
+        return {
+            "use_noop_penalty": self.use_noop_penalty,
+            "noop_penalty_options": self.noop_penalty_options,
+            "use_state_revisitation_penalty": self.use_state_revisitation_penalty,
+            "state_revisitation_penalty_options": self.state_revisitation_penalty_options,
+        }
+
+    def __repr__(self):
+        rep = "intrins_reward"
+        if self.use_noop_penalty:
+            rep += "_noop"
+        if self.use_state_revisitation_penalty:
+            rep += "_revisit"
+        return rep
+
+
 def get_is_recurrent(config):
     if "rnn" in config["config"]["model"]["custom_model"]:
         return True
@@ -139,6 +169,7 @@ def set_env_params(config, params, is_recurrent):
             "num_prev_frames": 1
         },
         "frame_stack_phase_correlation": False,
+        "count_state_occupancy": params.intrinsic_reward_params.use_state_revisitation_penalty,
     }
     config["config"]["env_config"]["env_wrapper_options"] = env_wrapper_options
     return config
@@ -192,15 +223,10 @@ def set_ppo_model_params(config, params, is_recurrent):
             "opt_type": "adam",
             "weight_decay": 0.0,
         },
-        "intrinsic_reward_options": {
-            "use_noop_penalty": True,
-            "noop_penalty_options": {
-                "reward": -0.1
-            }
-        },
         "fc_activation": params.fc_activation,
         "fc_size": params.fc_size,
     }
+    custom_model_options["intrinsic_reward_options"] = params.intrinsic_reward_params.options()
     config["config"]["model"]["custom_options"] = custom_model_options
     return config
 
@@ -222,7 +248,8 @@ def get_ppo_exp_name(params, is_recurrent):
         f"grad_clip_{str(params.grad_clip_params)}",
         # f"act_fn_{params.fc_activation}",
         # f"weight_init_{params.weight_init}",
-        f"rew_norm_{params.reward_normalization_params['mode']}_{params.reward_normalization_params['alpha']}",
+        f"rew_norm_alpha_{params.reward_normalization_params['alpha']}",
+        f"{str(params.intrinsic_reward_params)}",
     ])
 
     # Add the params that only apply in the recurrent or non-recurrent cases.
@@ -235,30 +262,29 @@ def get_ppo_exp_name(params, is_recurrent):
     return exp_name
 
 
-def sample_configs(
-    base_config,
-    learning_rate_options=[0.0005],
-    num_sgd_iter_options=[2],
-    num_filters_options=[[32, 48, 64]],
-    fc_size_options=[256],
-    lstm_cell_size_options=[256],
-    weight_init_options=["default"],
-    sampling_params_options=[PPOSamplingParams(4, 128, 32, 1024)],
-    max_seq_len_options=[16],
-    reward_normalization_params_options=[{
-        "mode": "running_return",
-        "alpha": 0.01,
-    }],
-    frame_stack_k_options=[2],
-    transforms_options=[["random_translate"]],
-    entropy_coeff_schedule_options=[
-        [[0, 0.01]],
-    ],
-    fc_activation_options=["relu"],
-    grad_clip_params_options=[PPOGradClipParams(1.0, "constant", 1.0, 0.1, 95, 100)],
-    dropout_prob_options=[0.1],
-    drac_weight_options=[0.1],
-):
+def sample_configs(base_config,
+                   learning_rate_options=[0.0005],
+                   num_sgd_iter_options=[2],
+                   num_filters_options=[[32, 48, 64]],
+                   fc_size_options=[256],
+                   lstm_cell_size_options=[256],
+                   weight_init_options=["default"],
+                   sampling_params_options=[PPOSamplingParams(4, 128, 32, 1024)],
+                   max_seq_len_options=[16],
+                   reward_normalization_params_options=[{
+                       "mode": "running_return",
+                       "alpha": 0.01,
+                   }],
+                   frame_stack_k_options=[2],
+                   transforms_options=[["random_translate"]],
+                   entropy_coeff_schedule_options=[
+                       [[0, 0.01]],
+                   ],
+                   fc_activation_options=["relu"],
+                   grad_clip_params_options=[PPOGradClipParams(1.0, "constant", 1.0, 0.1, 95, 100)],
+                   dropout_prob_options=[0.1],
+                   drac_weight_options=[0.1],
+                   intrinsic_reward_params_options=[IntrinsicRewardParams()]):
     is_recurrent = get_is_recurrent(base_config)
     parameter_settings = named_product(
         learning_rate=learning_rate_options,
@@ -277,6 +303,7 @@ def sample_configs(
         grad_clip_params=grad_clip_params_options,
         dropout_prob=dropout_prob_options,
         drac_weight=drac_weight_options,
+        intrinsic_reward_params=intrinsic_reward_params_options,
     )
     configs = dict()
     for params in parameter_settings:
@@ -312,6 +339,13 @@ def write_experiments(base, num_iterations, env_names):
                 [[0, 0.01], [4000000, 0.005]],
             ],
         ))
+    configs.update(
+        copy.deepcopy(base),
+        intrinsic_reward_params_options=[
+            IntrinsicRewardParams(use_state_revisitation_penalty=True)
+        ],
+    )
+
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
         for exp_name_template, config in configs.items():
