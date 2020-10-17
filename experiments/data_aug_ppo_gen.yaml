@@ -22,7 +22,7 @@ run_001_drac:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/ubuntu/experiments/procgen_008
+    local_dir: /home/ubuntu/experiments/procgen_009
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -36,7 +36,7 @@ run_001_drac:
         ################################################
         env_config:
             # Name of the procgen environment to train on # Note, that this parameter will be overriden during the evaluation by the AIcrowd evaluators.
-            env_name: starpilot # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
+            env_name: caveflyer # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
             # The number of unique levels that can be generated. Set to 0 to use unlimited levels
             num_levels: 200
             # The lowest seed that will be used to generated levels. 'start_level' and 'num_levels' fully specify the set of possible levels
@@ -75,7 +75,8 @@ run_001_drac:
               "normalize_reward": False,
               "normalize_reward_options": {
                 "discount": 0.999
-              }
+              },
+              "count_state_occupancy": False,
             }
 
 
@@ -261,6 +262,10 @@ run_001_drac:
                 "use_noop_penalty": True,
                 "noop_penalty_options": {
                   "reward": -0.1
+                },
+                "use_state_revisitation_penalty": True,
+                "state_revisitation_penalty_options": {
+                  "reward": -0.01
                 }
               },
               "fc_activation": "relu",

@@ -232,6 +232,43 @@ def apply_noop_penalty(sample_batch, options):
     return sample_batch
 
 
+def apply_state_revisitation_penalty(sample_batch, options):
+    infos = sample_batch[SampleBatch.INFOS]
+    if len(infos) == 0 or "occupancy_count" not in infos[0]:
+        return sample_batch
+
+    reward_value = options["reward"]
+    counts = [info["occupancy_count"] for info in infos]
+    dones = sample_batch[SampleBatch.DONES]
+    rewards = (np.array(counts) - 1) * reward_value
+    # Don't apply the reward on a terminal timestep.
+    rewards = rewards * (1 - dones)
+    sample_batch[SampleBatch.REWARDS] += rewards
+
+    debugging = False
+    if debugging:
+        print("\ncounts: ", counts)
+        print("intrinsic rewards: ", rewards)
+        print("overall rewards: ", sample_batch[SampleBatch.REWARDS])
+
+        should_plot = False
+        if sum(rewards) != 0 and should_plot:
+            import matplotlib.pyplot as plt
+            cur_obs = sample_batch[SampleBatch.CUR_OBS]
+            num_timesteps = len(counts)
+            for t in range(num_timesteps):
+                print("count: ", counts[t])
+                print("reward: ", rewards[t])
+                plt.imshow(cur_obs[t, :, :, -3:])
+                plt.show()
+                plt.close()
+        elif sum(rewards) != 0 and not should_plot:
+            import ipdb
+            ipdb.set_trace()
+
+    return sample_batch
+
+
 def intrinsic_reward_postprocess_sample_batch(policy,
                                               sample_batch,
                                               other_agent_batches=None,
@@ -240,6 +277,10 @@ def intrinsic_reward_postprocess_sample_batch(policy,
     if opt.get("use_noop_penalty", False):
         assert "noop_penalty_options" in opt
         sample_batch = apply_noop_penalty(sample_batch, opt["noop_penalty_options"])
+    if opt.get("use_state_revisitation_penalty", False):
+        assert "state_revisitation_penalty_options" in opt
+        sample_batch = apply_state_revisitation_penalty(sample_batch,
+                                                        opt["state_revisitation_penalty_options"])
     return sample_batch
 
 
@@ -347,9 +388,8 @@ def my_apply_grad_clipping(policy, optimizer, loss):
         if len(policy.prev_gradient_norms
                ) == policy.config["grad_clip_options"]["adaptive_buffer_size"]:
             # Compute the grad clip value as a percentile of the previous buffer_size gradient norms.
-            grad_clip = np.percentile(
-                policy.prev_gradient_norms,
-                q=policy.config["grad_clip_options"]["adaptive_percentile"])
+            grad_clip = np.percentile(policy.prev_gradient_norms,
+                                      q=policy.config["grad_clip_options"]["adaptive_percentile"])
             # Clip the grad clip value to a reasonable range.
             grad_clip = np.clip(
                 grad_clip,
