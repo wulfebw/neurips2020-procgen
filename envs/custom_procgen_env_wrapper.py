@@ -11,6 +11,7 @@ from envs.grayscale import Grayscale
 from envs.mixed_grayscale_color_frame_stack import MixedGrayscaleColorFrameStack
 from envs.procgen_env_wrapper import ProcgenEnvWrapper
 from envs.reward_normalization_wrapper import RewardNormalizationWrapper
+from envs.state_occupancy_counter import StateOccupancyCounter
 
 
 def wrap_procgen(env,
@@ -24,8 +25,11 @@ def wrap_procgen(env,
                  normalize_reward_options={},
                  grayscale=False,
                  mixed_grayscale_color=False,
-                 mixed_grayscale_color_options={}):
+                 mixed_grayscale_color_options={},
+                 count_state_occupancy=False):
     env_name = env.env_name
+    if count_state_occupancy:
+        env = StateOccupancyCounter(env)
     if frame_diff:
         env = FrameDiff(env, **frame_diff_options)
     if grayscale:
