@@ -63,6 +63,54 @@ class PPOSamplingParams:
         return 1 - (self.num_workers * self.num_gpus_per_worker)
 
 
+class PPOGradClipParams:
+    def __init__(self, grad_clip_elementwise, mode, clip_max, clip_min, percentile, buffer_size):
+        """Represents the grad clipping params.
+
+
+        `clip_max` is used as the default grad clip when running in constant mode.
+        """
+        assert grad_clip_elementwise > 0
+        self.grad_clip_elementwise = grad_clip_elementwise
+        assert mode in ["constant", "adaptive"]
+        self.mode = mode
+        assert clip_max > 0
+        self.clip_max = clip_max
+        assert clip_min > 0 and clip_min < clip_max
+        self.clip_min = clip_min
+        assert percentile >= 0 and percentile <= 100
+        self.percentile = percentile
+        assert buffer_size > 0
+        self.buffer_size = buffer_size
+
+    def options(self):
+        return {
+            "mode": self.mode,
+            "adaptive_max": self.clip_max,
+            "adaptive_min": self.clip_min,
+            "adaptive_percentile": self.percentile,
+            "adaptive_buffer_size": self.buffer_size,
+        }
+
+    @property
+    def grad_clip(self):
+        return self.clip_max
+
+    def __repr__(self):
+        if self.mode == "constant":
+            return f"constant_{self.grad_clip}_{self.grad_clip_elementwise}"
+        elif self.mode == "adaptive":
+            return "adaptive_" + "_".join(
+                str(v) for v in [
+                    self.clip_max,
+                    self.clip_min,
+                    self.percentile,
+                    self.buffer_size,
+                ])
+        else:
+            raise ValueError("Unsupported mode: {self.mode}")
+
+
 def get_is_recurrent(config):
     if "rnn" in config["config"]["model"]["custom_model"]:
         return True
@@ -81,7 +129,7 @@ def set_env_params(config, params, is_recurrent):
             "k": params.frame_stack_k
         },
         "frame_diff": False,
-        "normalize_reward": True if params.reward_normalization_mode == "env_rew_norm" else False,
+        "normalize_reward": params.reward_normalization_params["mode"] == "env_rew_norm",
         "normalize_reward_options": {
             "discount": config["config"]["gamma"]
         },
@@ -104,9 +152,10 @@ def set_ppo_algorithm_params(config, params):
     config["config"]["num_envs_per_worker"] = params.sampling_params.num_envs_per_worker
     config["config"]["rollout_fragment_length"] = params.sampling_params.rollout_fragment_length
     config["config"]["entropy_coeff_schedule"] = params.entropy_coeff_schedule
-    config["config"]["reward_normalization_options"] = {"mode": params.reward_normalization_mode}
-    config["config"]["grad_clip"] = params.grad_clip_pair[0]
-    config["config"]["grad_clip_elementwise"] = params.grad_clip_pair[1]
+    config["config"]["reward_normalization_options"] = params.reward_normalization_params
+    config["config"]["grad_clip"] = params.grad_clip_params.grad_clip
+    config["config"]["grad_clip_elementwise"] = params.grad_clip_params.grad_clip_elementwise
+    config["config"]["grad_clip_options"] = params.grad_clip_params.options()
 
     # All that matters is these gpu resource parameters add to 1.
     config["config"]["num_gpus_per_worker"] = params.sampling_params.num_gpus_per_worker
@@ -170,9 +219,10 @@ def get_ppo_exp_name(params, is_recurrent):
         f"ent_sch_{'_'.join(str(v) for y in params.entropy_coeff_schedule for v in y)}",
         f"dropout_{params.dropout_prob}",
         f"drac_{params.drac_weight}",
-        f"grad_clip_{params.grad_clip_pair[0]}_{params.grad_clip_pair[1]}",
-        f"act_fn_{params.fc_activation}",
-        f"weight_init_{params.weight_init}",
+        f"grad_clip_{str(params.grad_clip_params)}",
+        # f"act_fn_{params.fc_activation}",
+        # f"weight_init_{params.weight_init}",
+        f"rew_norm_{params.reward_normalization_params['mode']}_{params.reward_normalization_params['alpha']}",
     ])
 
     # Add the params that only apply in the recurrent or non-recurrent cases.
@@ -181,10 +231,6 @@ def get_ppo_exp_name(params, is_recurrent):
             f"rnn_size_{params.lstm_cell_size}",
             f"weight_init_{params.weight_init}",
             f"max_seq_len_{params.max_seq_len}",
-        ])
-    else:
-        exp_name += "_" + "_".join([
-            f"frame_stack_{params.frame_stack_k}",
         ])
     return exp_name
 
@@ -197,16 +243,19 @@ def sample_configs(
     fc_size_options=[256],
     lstm_cell_size_options=[256],
     weight_init_options=["default"],
-    sampling_params_options=[PPOSamplingParams(4, 64, 64, 1024)],
+    sampling_params_options=[PPOSamplingParams(4, 128, 32, 1024)],
     max_seq_len_options=[16],
-    reward_normalization_mode_options=["running_return"],
+    reward_normalization_params_options=[{
+        "mode": "running_return",
+        "alpha": 0.01,
+    }],
     frame_stack_k_options=[2],
     transforms_options=[["random_translate"]],
     entropy_coeff_schedule_options=[
         [[0, 0.01]],
     ],
     fc_activation_options=["relu"],
-    grad_clip_pair_options=[(10, 1.0)],
+    grad_clip_params_options=[PPOGradClipParams(1.0, "constant", 1.0, 0.1, 95, 100)],
     dropout_prob_options=[0.1],
     drac_weight_options=[0.1],
 ):
@@ -220,12 +269,12 @@ def sample_configs(
         weight_init=weight_init_options,
         sampling_params=sampling_params_options,
         max_seq_len=max_seq_len_options,
-        reward_normalization_mode=reward_normalization_mode_options,
+        reward_normalization_params=reward_normalization_params_options,
         frame_stack_k=frame_stack_k_options,
         transforms=transforms_options,
         entropy_coeff_schedule=entropy_coeff_schedule_options,
         fc_activation=fc_activation_options,
-        grad_clip_pair=grad_clip_pair_options,
+        grad_clip_params=grad_clip_params_options,
         dropout_prob=dropout_prob_options,
         drac_weight=drac_weight_options,
     )
@@ -243,14 +292,26 @@ def sample_configs(
 def write_experiments(base, num_iterations, env_names):
     exps = dict()
     configs = sample_configs(copy.deepcopy(base))
-    configs.update(sample_configs(copy.deepcopy(base), frame_stack_k_options=[3]))
-    configs.update(sample_configs(copy.deepcopy(base), weight_init_options=["orthogonal"]))
-    configs.update(sample_configs(copy.deepcopy(base), fc_activation_options=["tanh"]))
-    configs.update(sample_configs(copy.deepcopy(base), grad_clip_pair_options=[(1.0, 1.0)]))
-    configs.update(sample_configs(copy.deepcopy(base), fc_size_options=[512]))
     configs.update(
-        sample_configs(copy.deepcopy(base),
-                       sampling_params_options=[PPOSamplingParams(4, 128, 32, 1024)]))
+        sample_configs(
+            copy.deepcopy(base),
+            grad_clip_params_options=[PPOGradClipParams(1.0, "adaptive", 1.0, 0.1, 95, 100)],
+        ))
+    configs.update(
+        sample_configs(
+            copy.deepcopy(base),
+            reward_normalization_params_options=[{
+                "mode": "running_return",
+                "alpha": 0.005,
+            }],
+        ))
+    configs.update(
+        sample_configs(
+            copy.deepcopy(base),
+            entropy_coeff_schedule_options=[
+                [[0, 0.01], [4000000, 0.005]],
+            ],
+        ))
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
         for exp_name_template, config in configs.items():
