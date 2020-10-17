@@ -340,9 +340,36 @@ def my_apply_grad_clipping(policy, optimizer, loss):
     # Apply the gradient clipping elementwise first to prevent the larger gradients at the
     # end of the network from dominating after clipping the gradients by the global norm.
     info = apply_grad_clipping_elementwise(policy, optimizer, loss)
+
+    # Update the grad clip value depending on the mode.
+    if policy.config["grad_clip_options"]["mode"] == "adaptive":
+        assert policy.config.get("grad_clip_elementwise", None) is not None
+        if len(policy.prev_gradient_norms
+               ) == policy.config["grad_clip_options"]["adaptive_buffer_size"]:
+            # Compute the grad clip value as a percentile of the previous buffer_size gradient norms.
+            grad_clip = np.percentile(
+                policy.prev_gradient_norms,
+                q=policy.config["grad_clip_options"]["adaptive_percentile"])
+            # Clip the grad clip value to a reasonable range.
+            grad_clip = np.clip(
+                grad_clip,
+                policy.config["grad_clip_options"]["adaptive_min"],
+                policy.config["grad_clip_options"]["adaptive_max"],
+            )
+            # Update the grad clip value on the policy. This will take effect below.
+            policy.config["grad_clip"] = grad_clip
+            # Track the effective grad clip value as a metric.
+            info["effective_grad_clip"] = grad_clip
+
+        # Update buffer of gradients.
+        current_gradient_norm = info["after_ele_clip_global_grad_norm"]
+        policy.prev_gradient_norms.append(current_gradient_norm)
+
+    # Apply gradient clipping per usual, possibly using the updated grad clip value.
     global_info = apply_grad_clipping(policy, optimizer, loss)
     if "grad_gnorm" in global_info:
         info["final_grad_global_norm"] = global_info["grad_gnorm"].to("cpu")
+
     return info
 
 
@@ -354,6 +381,16 @@ def after_init_fn(policy, obs_space, action_space, config):
         policy.reward_norm_stats = RunningStat(max_count=1000)
     elif rew_norm_opt["mode"] == "running_return":
         policy.reward_norm_stats = ExpWeightedMovingAverageStat(alpha=rew_norm_opt["alpha"])
+    else:
+        raise ValueError(f"Unsupported reward norm mode: {rew_norm_opt['mode']}")
+
+    grad_clip_opt = policy.config["grad_clip_options"]
+    if grad_clip_opt["mode"] == "constant":
+        pass
+    elif grad_clip_opt["mode"] == "adaptive":
+        policy.prev_gradient_norms = collections.deque(maxlen=grad_clip_opt["adaptive_buffer_size"])
+    else:
+        raise ValueError(f"Unsupported grad clip mode: {grad_clip_opt['mode']}")
 
 
 # Custom params to be available in the policy.
@@ -361,7 +398,17 @@ def after_init_fn(policy, obs_space, action_space, config):
 # reflect that change above. The reason for this is that I don't want to hardcode defaults in
 # the code directly.
 DEFAULT_CONFIG["grad_clip_elementwise"] = None
-DEFAULT_CONFIG["reward_normalization_options"] = {"mode": "none", "alpha": 0.01}
+DEFAULT_CONFIG["grad_clip_options"] = {
+    "mode": "constant",
+    "adaptive_max": 1.0,
+    "adaptive_min": 0.1,
+    "adaptive_percentile": 95,
+    "adaptive_buffer_size": 100,
+}
+DEFAULT_CONFIG["reward_normalization_options"] = {
+    "mode": "none",
+    "alpha": 0.01,
+}
 
 DataAugmentingTorchPolicy = build_torch_policy(
     name="DataAugmentingTorchPolicy",
