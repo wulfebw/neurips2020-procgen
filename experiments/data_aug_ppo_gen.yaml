@@ -100,11 +100,11 @@ run_001_drac:
         num_sgd_iter: 2
         # Total SGD batch size across all devices for SGD. This defines the
         # minibatch size within each epoch.
-        sgd_minibatch_size: 128 # 1760 # 880 # 2048 # 8 minibatches per epoch
+        sgd_minibatch_size: 512 # 1760 # 880 # 2048 # 8 minibatches per epoch
         # Training batch size, if applicable. Should be >= rollout_fragment_length.
         # Samples batches will be concatenated together to a batch of this size,
         # which is then passed to SGD.
-        train_batch_size: 256 # 14080 # 16384 # 256 * 64
+        train_batch_size: 16384 # 14080 # 16384 # 256 * 64
         # Initial coefficient for KL divergence.
         kl_coeff: 0.0
         # Target value for KL divergence.
@@ -193,12 +193,14 @@ run_001_drac:
           ],
           "learner_class": "ucb",
           "ucb_options": {
-            "num_steps_per_update": 1,
+            # This should be set to (train_batch_size / sgd_minibatch_size) * num_sgd_iter
+            # Otherwise it every sgd minibatch, which just doesn't make sense at all
+            "num_steps_per_update": 64,
             "q_alpha": 0.01,
             "mean_reward_alpha": 0.1,
             # Eligibility trace weight. "1" would assign credit to every past action,
             # and "0" would assign credit to only the most recent action.
-            "lmbda": 0.75,
+            "lmbda": 0.8,
             "ucb_c": 0.1,
             "internal_reward_mode": "return",
           },
@@ -268,12 +270,12 @@ run_001_drac:
             # Extra options to pass to custom class
             custom_options: {
               # "num_filters": [32, 48, 64],
-              "num_filters": [8, 16, 16],
+              "num_filters": [16, 32, 32],
               "weight_init": "default",
               "data_augmentation_options": {
                 "mode": "drac",
                 "mode_options": {
-                  "drac": {"drac_weight": 0.1, "drac_value_weight": 1, "drac_policy_weight": 1}
+                  "drac": {"drac_weight": 0.2, "drac_value_weight": 1, "drac_policy_weight": 1}
                 },
                 "transforms": ["random_translate"],
               },
@@ -288,7 +290,7 @@ run_001_drac:
                 "noop_penalty_options": {
                   "reward": -0.1
                 },
-                "use_state_revisitation_penalty": True,
+                "use_state_revisitation_penalty": False,
                 "state_revisitation_penalty_options": {
                   "reward": -0.01
                 }
@@ -304,12 +306,12 @@ run_001_drac:
         ################################################
         # Number of rollout worker actors to create for parallel sampling. Setting
         # this to 0 will force rollouts to be done in the trainer actor.
-        num_workers: 0 # 4 # 0 # 1 # 4 # 6
+        num_workers: 4 # 4 # 0 # 1 # 4 # 6
 
         # Number of environments to evaluate vectorwise per worker. This enables
         # model inference batching, which can improve performance for inference
         # bottlenecked workloads.
-        num_envs_per_worker: 16 # 64 # 16 # 12
+        num_envs_per_worker: 128 # 64 # 16 # 12
 
         # Divide episodes into fragments of this many steps each during rollouts.
         # Sample batches of this size are collected from rollout workers and
@@ -326,7 +328,7 @@ run_001_drac:
         #
         # The dataflow here can vary per algorithm. For example, PPO further
         # divides the train batch into minibatches for multi-epoch SGD.
-        rollout_fragment_length: 16 # 256
+        rollout_fragment_length: 32 # 256
 
         # Whether to rollout "complete_episodes" or "truncate_episodes" to
         # `rollout_fragment_length` length unrolls. Episode truncation guarantees

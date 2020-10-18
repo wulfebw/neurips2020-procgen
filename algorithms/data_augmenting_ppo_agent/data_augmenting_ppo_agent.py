@@ -68,6 +68,11 @@ def update_transforms(policy, model, train_batch):
 
     transform_index, transform_info = policy.transform_selector.step(
         list(train_batch["rewards"].detach().cpu().numpy()))
+
+    # If the index is None, then no transform can be selected yet.
+    if transform_index is None:
+        return
+
     policy.transform_info = transform_info
 
     transform = policy.choose_between_transforms[transform_index]
@@ -200,7 +205,7 @@ def suppress_nan_and_inf(d, replacement=0):
 
 def add_auto_drac_stats(policy, stats):
     auto_drac_opt = policy.config["auto_drac_options"]
-    if not auto_drac_opt["active"]:
+    if not auto_drac_opt["active"] or not hasattr(policy, "transform_info"):
         return stats
 
     drac_stats = {}

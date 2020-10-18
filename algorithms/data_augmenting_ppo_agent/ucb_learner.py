@@ -33,6 +33,14 @@ class UCBLearner:
         self.info = None
 
     def step(self, rewards):
+        """Steps the learner forward.
+
+        Returns:
+            The action (index) to take and info about the internals.
+            It's possible either will be None, and if that's the case
+            The caller should choose the action in some other manner
+            (e.g., randomly).
+        """
         self.num_steps += 1
         self.collect(rewards)
         if self.should_update():
@@ -49,7 +57,21 @@ class UCBLearner:
         self.cur_rewards.extend(rewards)
 
     def should_update(self):
-        return (self.num_steps - 1) % self.num_steps_per_update == 0
+        """The goal is to perform an update once per overall training cycle.
+
+        This should return true at the last batch of that training cycle.
+        Why? Because that way we will have collected all the rewards from the training
+        batch (actually we will have collected them multiple times potentially,
+        but that's fine). Once we collect all the rewards, we want to perform an update,
+        and select a new action to provide.
+
+        `num_steps` is set to 1 on the first `step(...)` call (before this function is called).
+        The next time we want to return True then is after the total number of minibatches.
+        Say there's 4 of those = `self.num_steps_per_update`.
+        Then this should return True is when `self.num_steps` = 4.
+        """
+        print(self.num_steps % self.num_steps_per_update)
+        return self.num_steps % self.num_steps_per_update == 0
 
     def compute_internal_ucb_reward(self, cur_mean_reward):
         if self.internal_reward_mode == "advantage":
