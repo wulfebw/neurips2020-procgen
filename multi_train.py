@@ -294,6 +294,19 @@ def set_ppo_model_params(config, params, is_recurrent):
     return config
 
 
+def get_transform_abbreviation(transform):
+    if transform == "random_translate":
+        return "rt"
+    elif transform == "random_flip_up_down":
+        return "fup"
+    elif transform == "random_flip_left_right":
+        return "flp"
+    elif transform == "random_rotation":
+        return "rr"
+    else:
+        raise NotImplementedError(f"Transform not implemented {transform}")
+
+
 def get_ppo_exp_name(params, is_recurrent):
     # Start with the common params.
     exp_name = "_".join([
@@ -304,7 +317,7 @@ def get_ppo_exp_name(params, is_recurrent):
         f"filters_{'_'.join(str(v) for v in params.num_filters)}",
         # f"fc_size_{params.fc_size}",
         f"{params.sampling_params}",
-        "_".join(params.transforms),
+        "_".join([get_transform_abbreviation(t) for t in params.transforms]),
         f"ent_sch_{'_'.join(str(v) for y in params.entropy_coeff_schedule for v in y)}",
         # f"dropout_{params.dropout_prob}",
         # f"drac_{params.drac_weight}",
@@ -387,24 +400,35 @@ def write_experiments(base, num_iterations, env_names):
     # configs = sample_configs(copy.deepcopy(base))
     configs = sample_configs(
         copy.deepcopy(base),
-        auto_drac_params_options=[
-            AutoDracParams(
-                active=True,
-                choose_between_transforms=[
-                    "random_translate",
-                    "random_flip_left_right",
-                    "random_flip_up_down",
-                ],
-                ucb_options={
-                    "q_alpha": 0.01,
-                    "mean_reward_alpha": 0.05,
-                    "lmbda": 0.25,
-                    "ucb_c": 0.02,
-                    "internal_reward_mode": "return",
-                },
-            )
+        transforms_options=[
+            [
+                "random_translate",
+                "random_flip_left_right",
+                "random_flip_up_down",
+                "random_rotation",
+            ],
         ],
     )
+    # configs = sample_configs(
+    #     copy.deepcopy(base),
+    #     auto_drac_params_options=[
+    #         AutoDracParams(
+    #             active=True,
+    #             choose_between_transforms=[
+    #                 "random_translate",
+    #                 "random_flip_left_right",
+    #                 "random_flip_up_down",
+    #             ],
+    #             ucb_options={
+    #                 "q_alpha": 0.01,
+    #                 "mean_reward_alpha": 0.05,
+    #                 "lmbda": 0.25,
+    #                 "ucb_c": 0.02,
+    #                 "internal_reward_mode": "return",
+    #             },
+    #         )
+    #     ],
+    # )
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
         for exp_name_template, config in configs.items():
