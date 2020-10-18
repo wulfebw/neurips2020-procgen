@@ -39,12 +39,17 @@ def named_product(**items):
 
 
 class PPOSamplingParams:
-    def __init__(self, num_workers, num_envs_per_worker, rollout_fragment_length,
-                 sgd_minibatch_size):
+    def __init__(self,
+                 num_workers,
+                 num_envs_per_worker,
+                 rollout_fragment_length,
+                 sgd_minibatch_size,
+                 num_sgd_iter=2):
         self.num_workers = num_workers
         self.num_envs_per_worker = num_envs_per_worker
         self.rollout_fragment_length = rollout_fragment_length
         self.sgd_minibatch_size = sgd_minibatch_size
+        self.num_sgd_iter = num_sgd_iter
 
     def __repr__(self):
         return "_".join([
@@ -61,6 +66,13 @@ class PPOSamplingParams:
     @property
     def num_gpus(self):
         return 1 - (self.num_workers * self.num_gpus_per_worker)
+
+    @property
+    def total_minibatches_per_train_iteration(self):
+        train_batch_size = (self.num_workers * self.num_envs_per_worker *
+                            self.rollout_fragment_length)
+        total = int((train_batch_size / self.sgd_minibatch_size) * self.num_sgd_iter)
+        return total
 
 
 class PPOGradClipParams:
@@ -141,6 +153,55 @@ class IntrinsicRewardParams:
         return rep
 
 
+class AutoDracParams:
+    def __init__(
+        self,
+        active=False,
+        always_use_transforms=[],
+        choose_between_transforms=[
+            "random_translate",
+            "random_rotation",
+            "random_flip_left_right",
+            "random_flip_up_down",
+        ],
+        learner_class="ucb",
+        ucb_options={
+            "num_steps_per_update": None,
+            "q_alpha": 0.01,
+            "mean_reward_alpha": 0.05,
+            "lmbda": 0.25,
+            "ucb_c": 0.01,
+            "internal_reward_mode": "return",
+        }):
+        self.active = active
+        self.always_use_transforms = always_use_transforms
+        self.choose_between_transforms = choose_between_transforms
+        self.learner_class = learner_class
+        self.ucb_options = ucb_options
+
+    def options(self, num_steps_per_update):
+        ucb_options = copy.deepcopy(self.ucb_options)
+        ucb_options["num_steps_per_update"] = num_steps_per_update
+        return {
+            "active": self.active,
+            "always_use_transforms": self.always_use_transforms,
+            "choose_between_transforms": self.choose_between_transforms,
+            "learner_class": self.learner_class,
+            "ucb_options": ucb_options,
+        }
+
+    def __repr__(self):
+        if not self.active:
+            return "False"
+        return "_".join([
+            f"{self.active}",
+            f"{self.ucb_options['q_alpha']}",
+            f"{self.ucb_options['lmbda']}",
+            f"{self.ucb_options['ucb_c']}",
+            f"{self.ucb_options['internal_reward_mode']}",
+        ])
+
+
 def get_is_recurrent(config):
     if "rnn" in config["config"]["model"]["custom_model"]:
         return True
@@ -187,6 +248,8 @@ def set_ppo_algorithm_params(config, params):
     config["config"]["grad_clip"] = params.grad_clip_params.grad_clip
     config["config"]["grad_clip_elementwise"] = params.grad_clip_params.grad_clip_elementwise
     config["config"]["grad_clip_options"] = params.grad_clip_params.options()
+    config["config"]["auto_drac_options"] = params.auto_drac_params.options(
+        params.sampling_params.total_minibatches_per_train_iteration)
 
     # All that matters is these gpu resource parameters add to 1.
     config["config"]["num_gpus_per_worker"] = params.sampling_params.num_gpus_per_worker
@@ -239,17 +302,18 @@ def get_ppo_exp_name(params, is_recurrent):
         f"lr_{params.learning_rate}",
         f"sgd_itr_{params.num_sgd_iter}",
         f"filters_{'_'.join(str(v) for v in params.num_filters)}",
-        f"fc_size_{params.fc_size}",
+        # f"fc_size_{params.fc_size}",
         f"{params.sampling_params}",
         "_".join(params.transforms),
         f"ent_sch_{'_'.join(str(v) for y in params.entropy_coeff_schedule for v in y)}",
-        f"dropout_{params.dropout_prob}",
+        # f"dropout_{params.dropout_prob}",
         f"drac_{params.drac_weight}",
         f"grad_clip_{str(params.grad_clip_params)}",
         # f"act_fn_{params.fc_activation}",
         # f"weight_init_{params.weight_init}",
         f"rew_norm_alpha_{params.reward_normalization_params['alpha']}",
         f"{str(params.intrinsic_reward_params)}",
+        f"auto_drac_{params.auto_drac_params}"
     ])
 
     # Add the params that only apply in the recurrent or non-recurrent cases.
@@ -269,7 +333,7 @@ def sample_configs(base_config,
                    fc_size_options=[256],
                    lstm_cell_size_options=[256],
                    weight_init_options=["default"],
-                   sampling_params_options=[PPOSamplingParams(4, 128, 32, 1024)],
+                   sampling_params_options=[PPOSamplingParams(4, 256, 16, 1024)],
                    max_seq_len_options=[16],
                    reward_normalization_params_options=[{
                        "mode": "running_return",
@@ -284,7 +348,8 @@ def sample_configs(base_config,
                    grad_clip_params_options=[PPOGradClipParams(1.0, "constant", 1.0, 0.1, 95, 100)],
                    dropout_prob_options=[0.1],
                    drac_weight_options=[0.1],
-                   intrinsic_reward_params_options=[IntrinsicRewardParams()]):
+                   intrinsic_reward_params_options=[IntrinsicRewardParams()],
+                   auto_drac_params_options=[AutoDracParams()]):
     is_recurrent = get_is_recurrent(base_config)
     parameter_settings = named_product(
         learning_rate=learning_rate_options,
@@ -304,6 +369,7 @@ def sample_configs(base_config,
         dropout_prob=dropout_prob_options,
         drac_weight=drac_weight_options,
         intrinsic_reward_params=intrinsic_reward_params_options,
+        auto_drac_params=auto_drac_params_options,
     )
     configs = dict()
     for params in parameter_settings:
@@ -322,36 +388,24 @@ def write_experiments(base, num_iterations, env_names):
     configs.update(
         sample_configs(
             copy.deepcopy(base),
-            grad_clip_params_options=[PPOGradClipParams(1.0, "adaptive", 5.0, 0.1, 95, 100)],
-        ))
-    configs.update(
-        sample_configs(
-            copy.deepcopy(base),
-            reward_normalization_params_options=[{
-                "mode": "running_return",
-                "alpha": 0.005,
-            }],
-        ))
-    configs.update(
-        sample_configs(
-            copy.deepcopy(base),
-            entropy_coeff_schedule_options=[
-                [[0, 0.01], [4000000, 0.01], [4000001, 0.0]],
+            auto_drac_params_options=[
+                AutoDracParams(
+                    active=True,
+                    choose_between_transforms=[
+                        "random_translate",
+                        "random_flip_left_right",
+                        "random_flip_up_down",
+                    ],
+                    ucb_options={
+                        "q_alpha": 0.01,
+                        "mean_reward_alpha": 0.05,
+                        "lmbda": 0.25,
+                        "ucb_c": 0.02,
+                        "internal_reward_mode": "return",
+                    },
+                )
             ],
         ))
-    configs.update(
-        sample_configs(
-            copy.deepcopy(base),
-            intrinsic_reward_params_options=[
-                IntrinsicRewardParams(use_state_revisitation_penalty=True)
-            ],
-        ))
-    configs.update(
-        sample_configs(
-            copy.deepcopy(base),
-            sampling_params_options=[PPOSamplingParams(4, 256, 16, 1024)],
-        ))
-
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
         for exp_name_template, config in configs.items():

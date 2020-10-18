@@ -195,13 +195,13 @@ run_001_drac:
           "ucb_options": {
             # This should be set to (train_batch_size / sgd_minibatch_size) * num_sgd_iter
             # Otherwise it every sgd minibatch, which just doesn't make sense at all
-            "num_steps_per_update": 64,
+            "num_steps_per_update": null, # UPDATE PRIOR TO SUBMITTING
             "q_alpha": 0.01,
             "mean_reward_alpha": 0.05,
             # Eligibility trace weight. "1" would assign credit to every past action,
             # and "0" would assign credit to only the most recent action.
             "lmbda": 0.25,
-            "ucb_c": 0.05,
+            "ucb_c": 0.02,
             "internal_reward_mode": "return",
           },
         }

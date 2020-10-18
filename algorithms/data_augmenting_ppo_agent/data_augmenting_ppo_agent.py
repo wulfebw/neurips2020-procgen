@@ -537,13 +537,15 @@ DEFAULT_CONFIG["auto_drac_options"] = {
     "learner_class":
     "ucb",
     "ucb_options": {
-        "num_steps_per_update": 1,
+        # This is the number of minibatches per action selection.
+        # It should match train_batch_size * 
+        "num_steps_per_update": 64,
         "q_alpha": 0.01,
         "mean_reward_alpha": 0.1,
         # Eligibility trace weight. "1" would assign credit to every past action,
         # and "0" would assign credit to only the most recent action.
         "lmbda": 0.25,
-        "ucb_c": 0.001,
+        "ucb_c": 0.05,
         "internal_reward_mode": "return",
     },
 }
