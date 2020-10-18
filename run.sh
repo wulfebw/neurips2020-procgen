@@ -5,7 +5,7 @@ set -e
 # Your experiment file for submission   #
 #########################################
 
-export EXPERIMENT_DEFAULT="experiments/data_aug_ppo.yaml"
+export EXPERIMENT_DEFAULT="experiments/data_aug_ppo_gen.yaml"
 export EXPERIMENT=${EXPERIMENT:-$EXPERIMENT_DEFAULT}
 
 if [[ -z $AICROWD_IS_GRADING ]]; then

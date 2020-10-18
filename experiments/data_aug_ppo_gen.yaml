@@ -1,6 +1,7 @@
 run_001_drac:
     env: custom_procgen_env_wrapper  # Change this at your own risk :D
     run: custom/DataAugmentingPPOTrainer
+    disable_evaluation_worker: True
     # Can be replaced by any of the available agents as described at : 
     # https://github.com/ray-project/ray/blob/master/rllib/agents/registry.py#L103
     # 
@@ -17,14 +18,15 @@ run_001_drac:
     ################################################
     stop:
         timesteps_total: 8000000
+        time_total_s: 7200
 
     ################################################
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/ubuntu/experiments/procgen_009
+    # local_dir: /home/wulfebw/experiments/procgen_000 # AHHH
     ### END ADDED
-    checkpoint_freq: 50
+    checkpoint_freq: 5
     checkpoint_at_end: True
     keep_checkpoints_num: 5
 
@@ -38,7 +40,7 @@ run_001_drac:
             # Name of the procgen environment to train on # Note, that this parameter will be overriden during the evaluation by the AIcrowd evaluators.
             env_name: caveflyer # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
             # The number of unique levels that can be generated. Set to 0 to use unlimited levels
-            num_levels: 200
+            num_levels: 0
             # The lowest seed that will be used to generated levels. 'start_level' and 'num_levels' fully specify the set of possible levels
             start_level: 0
             # Paint player velocity info in the top left corner. Only supported by certain games.
@@ -127,11 +129,11 @@ run_001_drac:
         grad_clip: 1.0
         grad_clip_elementwise: 1.0
         grad_clip_options: {
-          "mode": "constant",
-          "adaptive_max": 1.0,
+          "mode": "adaptive",
+          "adaptive_max": 5.0,
           "adaptive_min": 0.1,
           "adaptive_percentile": 95,
-          "adaptive_buffer_size": 100,
+          "adaptive_buffer_size": 128,
         }
         # Which observation filter to apply to the observation.
         observation_filter: NoFilter
@@ -263,7 +265,7 @@ run_001_drac:
                 "noop_penalty_options": {
                   "reward": -0.1
                 },
-                "use_state_revisitation_penalty": True,
+                "use_state_revisitation_penalty": False,
                 "state_revisitation_penalty_options": {
                   "reward": -0.01
                 }
@@ -378,7 +380,7 @@ run_001_drac:
         # === Evaluation Settings ===
         ################################################
         ################################################
-        evaluation_interval: 480 # 568 # unfortunate to have to hardcode this, but not sure how better to do it.
-        evaluation_num_episodes: 2000
-        evaluation_num_workers: 0
-        evaluation_config: {"env_config": {"num_levels": 0, "env_wrapper_options": {"normalize_reward": False}}}
+        # evaluation_interval: 480 # 568 # unfortunate to have to hardcode this, but not sure how better to do it.
+        # evaluation_num_episodes: 2000
+        # evaluation_num_workers: 0
+        # evaluation_config: {"env_config": {"num_levels": 0, "env_wrapper_options": {"normalize_reward": False}}}
