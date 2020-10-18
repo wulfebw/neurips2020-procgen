@@ -70,7 +70,6 @@ class UCBLearner:
         Say there's 4 of those = `self.num_steps_per_update`.
         Then this should return True is when `self.num_steps` = 4.
         """
-        print(self.num_steps % self.num_steps_per_update)
         return self.num_steps % self.num_steps_per_update == 0
 
     def compute_internal_ucb_reward(self, cur_mean_reward):

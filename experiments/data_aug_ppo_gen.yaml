@@ -197,11 +197,11 @@ run_001_drac:
             # Otherwise it every sgd minibatch, which just doesn't make sense at all
             "num_steps_per_update": 64,
             "q_alpha": 0.01,
-            "mean_reward_alpha": 0.1,
+            "mean_reward_alpha": 0.05,
             # Eligibility trace weight. "1" would assign credit to every past action,
             # and "0" would assign credit to only the most recent action.
-            "lmbda": 0.8,
-            "ucb_c": 0.1,
+            "lmbda": 0.25,
+            "ucb_c": 0.05,
             "internal_reward_mode": "return",
           },
         }
