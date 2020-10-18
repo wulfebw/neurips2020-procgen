@@ -322,7 +322,7 @@ def write_experiments(base, num_iterations, env_names):
     configs.update(
         sample_configs(
             copy.deepcopy(base),
-            grad_clip_params_options=[PPOGradClipParams(1.0, "adaptive", 1.0, 0.1, 95, 100)],
+            grad_clip_params_options=[PPOGradClipParams(1.0, "adaptive", 5.0, 0.1, 95, 100)],
         ))
     configs.update(
         sample_configs(
@@ -336,7 +336,7 @@ def write_experiments(base, num_iterations, env_names):
         sample_configs(
             copy.deepcopy(base),
             entropy_coeff_schedule_options=[
-                [[0, 0.01], [4000000, 0.005]],
+                [[0, 0.01], [4000000, 0.01], [4000001, 0.0]],
             ],
         ))
     configs.update(
@@ -345,6 +345,11 @@ def write_experiments(base, num_iterations, env_names):
             IntrinsicRewardParams(use_state_revisitation_penalty=True)
         ],
     )
+    configs.update(
+        sample_configs(
+            copy.deepcopy(base),
+            sampling_params_options=[PPOSamplingParams(4, 256, 16, 1024)],
+        ))
 
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
