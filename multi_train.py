@@ -300,14 +300,14 @@ def get_ppo_exp_name(params, is_recurrent):
         "{}_itr_{}",
         f"{'rnn' if is_recurrent else 'cnn'}",
         f"lr_{params.learning_rate}",
-        f"sgd_itr_{params.num_sgd_iter}",
+        # f"sgd_itr_{params.num_sgd_iter}",
         f"filters_{'_'.join(str(v) for v in params.num_filters)}",
         # f"fc_size_{params.fc_size}",
         f"{params.sampling_params}",
         "_".join(params.transforms),
         f"ent_sch_{'_'.join(str(v) for y in params.entropy_coeff_schedule for v in y)}",
         # f"dropout_{params.dropout_prob}",
-        f"drac_{params.drac_weight}",
+        # f"drac_{params.drac_weight}",
         f"grad_clip_{str(params.grad_clip_params)}",
         # f"act_fn_{params.fc_activation}",
         # f"weight_init_{params.weight_init}",
@@ -384,28 +384,27 @@ def sample_configs(base_config,
 
 def write_experiments(base, num_iterations, env_names):
     exps = dict()
-    configs = sample_configs(copy.deepcopy(base))
-    configs.update(
-        sample_configs(
-            copy.deepcopy(base),
-            auto_drac_params_options=[
-                AutoDracParams(
-                    active=True,
-                    choose_between_transforms=[
-                        "random_translate",
-                        "random_flip_left_right",
-                        "random_flip_up_down",
-                    ],
-                    ucb_options={
-                        "q_alpha": 0.01,
-                        "mean_reward_alpha": 0.05,
-                        "lmbda": 0.25,
-                        "ucb_c": 0.02,
-                        "internal_reward_mode": "return",
-                    },
-                )
-            ],
-        ))
+    # configs = sample_configs(copy.deepcopy(base))
+    configs = sample_configs(
+        copy.deepcopy(base),
+        auto_drac_params_options=[
+            AutoDracParams(
+                active=True,
+                choose_between_transforms=[
+                    "random_translate",
+                    "random_flip_left_right",
+                    "random_flip_up_down",
+                ],
+                ucb_options={
+                    "q_alpha": 0.01,
+                    "mean_reward_alpha": 0.05,
+                    "lmbda": 0.25,
+                    "ucb_c": 0.02,
+                    "internal_reward_mode": "return",
+                },
+            )
+        ],
+    )
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
         for exp_name_template, config in configs.items():
