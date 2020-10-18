@@ -499,7 +499,7 @@ def after_init_fn(policy, obs_space, action_space, config):
             policy.transform_selector = UCBLearner(
                 policy.choose_between_transforms,
                 **auto_drac_opt["ucb_options"],
-                verbose=True,
+                verbose=False,
             )
         else:
             raise NotImplementedError(f"Learner not implemented: {auto_drac_opt['learner_class']}")
