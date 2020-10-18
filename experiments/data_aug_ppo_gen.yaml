@@ -182,7 +182,7 @@ run_001_drac:
 
         # Options for auto drac. These are in addition to those in the model config.
         auto_drac_options: {
-          "active": True,
+          "active": False,
           "always_use_transforms": [],
           "choose_between_transforms": [
             "random_translate",
