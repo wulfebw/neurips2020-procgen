@@ -340,11 +340,12 @@ def write_experiments(base, num_iterations, env_names):
             ],
         ))
     configs.update(
-        copy.deepcopy(base),
-        intrinsic_reward_params_options=[
-            IntrinsicRewardParams(use_state_revisitation_penalty=True)
-        ],
-    )
+        sample_configs(
+            copy.deepcopy(base),
+            intrinsic_reward_params_options=[
+                IntrinsicRewardParams(use_state_revisitation_penalty=True)
+            ],
+        ))
     configs.update(
         sample_configs(
             copy.deepcopy(base),
