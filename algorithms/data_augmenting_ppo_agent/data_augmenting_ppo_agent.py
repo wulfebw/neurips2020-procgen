@@ -25,6 +25,7 @@ from algorithms.data_augmentation.data_augmentation import apply_data_augmentati
 from algorithms.data_augmenting_ppo_agent.ppo_utils import (compute_running_mean_and_variance,
                                                             RunningStat,
                                                             ExpWeightedMovingAverageStat)
+from algorithms.data_augmenting_ppo_agent.ucb_learner import UCBLearner
 
 torch, nn = try_import_torch()
 logger = logging.getLogger(__name__)
@@ -60,6 +61,27 @@ def compute_ppo_loss(policy, dist_class, model, train_batch, action_dist, state)
     return policy.loss_obj.loss
 
 
+def update_transforms(policy, model, train_batch):
+    auto_drac_opt = policy.config["auto_drac_options"]
+    if not auto_drac_opt["active"]:
+        return
+
+    transform_index, transform_info = policy.transform_selector.step(
+        list(train_batch["rewards"].detach().cpu().numpy()))
+    policy.transform_info = transform_info
+
+    transform = policy.choose_between_transforms[transform_index]
+    if isinstance(transform, str):
+        formatted_transform = [transform]
+    elif isinstance(transform, tuple):
+        formatted_transform = list(transform)
+    else:
+        raise ValueError(f"Invalid transform: {transform}")
+
+    model.data_augmentation_options["transforms"] = (policy.always_use_transforms +
+                                                     formatted_transform)
+
+
 def drac_data_augmenting_loss(policy,
                               model,
                               dist_class,
@@ -69,6 +91,9 @@ def drac_data_augmenting_loss(policy,
                               drac_policy_weight=1,
                               recurrent_repeat_transform=True):
     assert len(model.data_augmentation_options["transforms"]) > 0
+
+    # If learning to select between transforms, do that first.
+    update_transforms(policy, model, train_batch)
 
     no_aug_logits, no_aug_state = model.from_batch(train_batch)
     no_aug_action_dist = dist_class(no_aug_logits, model)
@@ -173,10 +198,32 @@ def suppress_nan_and_inf(d, replacement=0):
     return d
 
 
+def add_auto_drac_stats(policy, stats):
+    auto_drac_opt = policy.config["auto_drac_options"]
+    if not auto_drac_opt["active"]:
+        return stats
+
+    drac_stats = {}
+    drac_stats.update(
+        {f"drac_{k}_value": v
+         for (k, v) in policy.transform_info["action_values"].items()})
+    drac_stats.update(
+        {f"drac_{k}_count": v
+         for (k, v) in policy.transform_info["action_counts"].items()})
+    drac_stats.update(
+        {f"drac_{k}_eligibility": v
+         for (k, v) in policy.transform_info["eligibility"].items()})
+    if "overall_mean_reward" in policy.transform_info:
+        drac_stats["overall_mean_reward"] = policy.transform_info["overall_mean_reward"]
+    stats.update(drac_stats)
+    return stats
+
+
 def data_augmenting_stats(policy, train_batch):
     stats = kl_and_loss_stats(policy, train_batch)
     if hasattr(policy.loss_obj, "data_aug_loss"):
         stats["drac_loss_unweighted"] = policy.loss_obj.data_aug_loss
+    stats = add_auto_drac_stats(policy, stats)
     stats = suppress_nan_and_inf(stats)
     return stats
 
@@ -416,6 +463,7 @@ def my_apply_grad_clipping(policy, optimizer, loss):
 def after_init_fn(policy, obs_space, action_space, config):
     setup_mixins(policy, obs_space, action_space, config)
 
+    # Reward normalization.
     rew_norm_opt = policy.config["reward_normalization_options"]
     if rew_norm_opt["mode"] == "running_mean_std":
         policy.reward_norm_stats = RunningStat(max_count=1000)
@@ -424,6 +472,7 @@ def after_init_fn(policy, obs_space, action_space, config):
     else:
         raise ValueError(f"Unsupported reward norm mode: {rew_norm_opt['mode']}")
 
+    # Gradient clipping.
     grad_clip_opt = policy.config["grad_clip_options"]
     if grad_clip_opt["mode"] == "constant":
         pass
@@ -431,6 +480,24 @@ def after_init_fn(policy, obs_space, action_space, config):
         policy.prev_gradient_norms = collections.deque(maxlen=grad_clip_opt["adaptive_buffer_size"])
     else:
         raise ValueError(f"Unsupported grad clip mode: {grad_clip_opt['mode']}")
+
+    # Automatic data augmentation.
+    auto_drac_opt = policy.config["auto_drac_options"]
+    if auto_drac_opt["active"]:
+        policy.always_use_transforms = auto_drac_opt["always_use_transforms"]
+        policy.choose_between_transforms = []
+        for t in auto_drac_opt["choose_between_transforms"]:
+            if isinstance(t, list):
+                t = tuple(t)
+            policy.choose_between_transforms.append(t)
+        if auto_drac_opt["learner_class"] == "ucb":
+            policy.transform_selector = UCBLearner(
+                policy.choose_between_transforms,
+                **auto_drac_opt["ucb_options"],
+                verbose=True,
+            )
+        else:
+            raise NotImplementedError(f"Learner not implemented: {auto_drac_opt['learner_class']}")
 
 
 # Custom params to be available in the policy.
@@ -445,9 +512,35 @@ DEFAULT_CONFIG["grad_clip_options"] = {
     "adaptive_percentile": 95,
     "adaptive_buffer_size": 100,
 }
+
 DEFAULT_CONFIG["reward_normalization_options"] = {
     "mode": "none",
     "alpha": 0.01,
+}
+
+DEFAULT_CONFIG["auto_drac_options"] = {
+    "active":
+    False,
+    "always_use_transforms": [],
+    "choose_between_transforms": [
+        "random_translate",
+        "random_rotation",
+        "random_flip_left_right",
+        "random_flip_up_down",
+        ["random_translate", "random_flip_left_right"],
+    ],
+    "learner_class":
+    "ucb",
+    "ucb_options": {
+        "num_steps_per_update": 1,
+        "q_alpha": 0.01,
+        "mean_reward_alpha": 0.1,
+        # Eligibility trace weight. "1" would assign credit to every past action,
+        # and "0" would assign credit to only the most recent action.
+        "lmbda": 0.25,
+        "ucb_c": 0.001,
+        "internal_reward_mode": "return",
+    },
 }
 
 DataAugmentingTorchPolicy = build_torch_policy(

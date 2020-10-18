@@ -22,7 +22,7 @@ run_001_drac:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/ubuntu/experiments/procgen_009
+    local_dir: /home/wulfebw/experiments/procgen_000
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -100,11 +100,11 @@ run_001_drac:
         num_sgd_iter: 2
         # Total SGD batch size across all devices for SGD. This defines the
         # minibatch size within each epoch.
-        sgd_minibatch_size: 1024 # 1760 # 880 # 2048 # 8 minibatches per epoch
+        sgd_minibatch_size: 128 # 1760 # 880 # 2048 # 8 minibatches per epoch
         # Training batch size, if applicable. Should be >= rollout_fragment_length.
         # Samples batches will be concatenated together to a batch of this size,
         # which is then passed to SGD.
-        train_batch_size: 16384 # 14080 # 16384 # 256 * 64
+        train_batch_size: 256 # 14080 # 16384 # 256 * 64
         # Initial coefficient for KL divergence.
         kl_coeff: 0.0
         # Target value for KL divergence.
@@ -180,6 +180,30 @@ run_001_drac:
         # NOTE: Some agents may not support `torch` yet and throw an error.
         use_pytorch: True
 
+        # Options for auto drac. These are in addition to those in the model config.
+        auto_drac_options: {
+          "active": True,
+          "always_use_transforms": [],
+          "choose_between_transforms": [
+            "random_translate",
+            "random_rotation",
+            # "random_flip_left_right",
+            # "random_flip_up_down",
+            # ["random_translate", "random_flip_left_right"],
+          ],
+          "learner_class": "ucb",
+          "ucb_options": {
+            "num_steps_per_update": 1,
+            "q_alpha": 0.01,
+            "mean_reward_alpha": 0.1,
+            # Eligibility trace weight. "1" would assign credit to every past action,
+            # and "0" would assign credit to only the most recent action.
+            "lmbda": 0.75,
+            "ucb_c": 0.1,
+            "internal_reward_mode": "return",
+          },
+        }
+        
         ################################################
         ################################################
         # === Settings for Model ===
@@ -243,7 +267,8 @@ run_001_drac:
             custom_model: custom_impala_cnn_torch
             # Extra options to pass to custom class
             custom_options: {
-              "num_filters": [32, 48, 64],
+              # "num_filters": [32, 48, 64],
+              "num_filters": [8, 16, 16],
               "weight_init": "default",
               "data_augmentation_options": {
                 "mode": "drac",
@@ -279,12 +304,12 @@ run_001_drac:
         ################################################
         # Number of rollout worker actors to create for parallel sampling. Setting
         # this to 0 will force rollouts to be done in the trainer actor.
-        num_workers: 4 # 0 # 1 # 4 # 6
+        num_workers: 0 # 4 # 0 # 1 # 4 # 6
 
         # Number of environments to evaluate vectorwise per worker. This enables
         # model inference batching, which can improve performance for inference
         # bottlenecked workloads.
-        num_envs_per_worker: 128 # 64 # 16 # 12
+        num_envs_per_worker: 16 # 64 # 16 # 12
 
         # Divide episodes into fragments of this many steps each during rollouts.
         # Sample batches of this size are collected from rollout workers and
@@ -301,7 +326,7 @@ run_001_drac:
         #
         # The dataflow here can vary per algorithm. For example, PPO further
         # divides the train batch into minibatches for multi-epoch SGD.
-        rollout_fragment_length: 32 # 256
+        rollout_fragment_length: 16 # 256
 
         # Whether to rollout "complete_episodes" or "truncate_episodes" to
         # `rollout_fragment_length` length unrolls. Episode truncation guarantees
