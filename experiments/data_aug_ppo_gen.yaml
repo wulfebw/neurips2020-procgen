@@ -22,7 +22,7 @@ run_001_drac:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/ubuntu/experiments/procgen_009
+    local_dir: /home/ubuntu/experiments/procgen_010
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -180,6 +180,32 @@ run_001_drac:
         # NOTE: Some agents may not support `torch` yet and throw an error.
         use_pytorch: True
 
+        # Options for auto drac. These are in addition to those in the model config.
+        auto_drac_options: {
+          "active": False,
+          "always_use_transforms": [],
+          "choose_between_transforms": [
+            "random_translate",
+            "random_rotation",
+            # "random_flip_left_right",
+            # "random_flip_up_down",
+            # ["random_translate", "random_flip_left_right"],
+          ],
+          "learner_class": "ucb",
+          "ucb_options": {
+            # This should be set to (train_batch_size / sgd_minibatch_size) * num_sgd_iter
+            # Otherwise it every sgd minibatch, which just doesn't make sense at all
+            "num_steps_per_update": null, # UPDATE PRIOR TO SUBMITTING
+            "q_alpha": 0.01,
+            "mean_reward_alpha": 0.05,
+            # Eligibility trace weight. "1" would assign credit to every past action,
+            # and "0" would assign credit to only the most recent action.
+            "lmbda": 0.25,
+            "ucb_c": 0.02,
+            "internal_reward_mode": "return",
+          },
+        }
+        
         ################################################
         ################################################
         # === Settings for Model ===
@@ -248,7 +274,7 @@ run_001_drac:
               "data_augmentation_options": {
                 "mode": "drac",
                 "mode_options": {
-                  "drac": {"drac_weight": 0.1, "drac_value_weight": 1, "drac_policy_weight": 1}
+                  "drac": {"drac_weight": 0.2, "drac_value_weight": 1, "drac_policy_weight": 1}
                 },
                 "transforms": ["random_translate"],
               },
@@ -263,7 +289,7 @@ run_001_drac:
                 "noop_penalty_options": {
                   "reward": -0.1
                 },
-                "use_state_revisitation_penalty": True,
+                "use_state_revisitation_penalty": False,
                 "state_revisitation_penalty_options": {
                   "reward": -0.01
                 }
@@ -279,12 +305,12 @@ run_001_drac:
         ################################################
         # Number of rollout worker actors to create for parallel sampling. Setting
         # this to 0 will force rollouts to be done in the trainer actor.
-        num_workers: 4 # 0 # 1 # 4 # 6
+        num_workers: 4 # 4 # 0 # 1 # 4 # 6
 
         # Number of environments to evaluate vectorwise per worker. This enables
         # model inference batching, which can improve performance for inference
         # bottlenecked workloads.
-        num_envs_per_worker: 128 # 64 # 16 # 12
+        num_envs_per_worker: 256 # 64 # 16 # 12
 
         # Divide episodes into fragments of this many steps each during rollouts.
         # Sample batches of this size are collected from rollout workers and
@@ -301,7 +327,7 @@ run_001_drac:
         #
         # The dataflow here can vary per algorithm. For example, PPO further
         # divides the train batch into minibatches for multi-epoch SGD.
-        rollout_fragment_length: 32 # 256
+        rollout_fragment_length: 16 # 256
 
         # Whether to rollout "complete_episodes" or "truncate_episodes" to
         # `rollout_fragment_length` length unrolls. Episode truncation guarantees
