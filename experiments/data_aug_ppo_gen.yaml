@@ -165,7 +165,7 @@ run_001_drac:
         # custom options
         reward_normalization_options: {
           "mode": "running_return",
-          "alpha": 0.01,
+          "alpha": 0.005,
         }
 
         # Whether to attempt to continue training if a worker crashes. The number
