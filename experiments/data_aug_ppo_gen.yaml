@@ -127,11 +127,11 @@ run_001_drac:
         grad_clip: 1.0
         grad_clip_elementwise: 1.0
         grad_clip_options: {
-          "mode": "constant",
-          "adaptive_max": 1.0,
+          "mode": "adaptive",
+          "adaptive_max": 5.0,
           "adaptive_min": 0.1,
           "adaptive_percentile": 95,
-          "adaptive_buffer_size": 100,
+          "adaptive_buffer_size": 128,
         }
         # Which observation filter to apply to the observation.
         observation_filter: NoFilter
@@ -163,7 +163,7 @@ run_001_drac:
         # custom options
         reward_normalization_options: {
           "mode": "running_return",
-          "alpha": 0.01,
+          "alpha": 0.005,
         }
 
         # Whether to attempt to continue training if a worker crashes. The number
