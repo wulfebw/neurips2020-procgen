@@ -9,7 +9,7 @@ torch, nn = try_import_torch()
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, channels):
+    def __init__(self, channels, dropout_prob=0.0):
         super().__init__()
         self.conv0 = nn.Conv2d(in_channels=channels,
                                out_channels=channels,
@@ -19,13 +19,19 @@ class ResidualBlock(nn.Module):
                                out_channels=channels,
                                kernel_size=3,
                                padding=1)
+        self._dropout_prob = dropout_prob
+        self.dropout_layer = nn.Dropout2d(self._dropout_prob)
 
     def forward(self, x):
         inputs = x
         x = nn.functional.relu(x)
         x = self.conv0(x)
+        if self._dropout_prob > 0.0:
+            x = self.dropout_layer(x)
         x = nn.functional.relu(x)
         x = self.conv1(x)
+        if self._dropout_prob > 0.0:
+            x = self.dropout_layer(x)
         x = x + inputs
         return x
 
@@ -41,8 +47,8 @@ class ConvSequence(nn.Module):
                               out_channels=self._out_channels,
                               kernel_size=3,
                               padding=1)
-        self.res_block0 = ResidualBlock(self._out_channels)
-        self.res_block1 = ResidualBlock(self._out_channels)
+        self.res_block0 = ResidualBlock(self._out_channels, dropout_prob=dropout_prob)
+        self.res_block1 = ResidualBlock(self._out_channels, dropout_prob=dropout_prob)
 
         self.dropout_layer = nn.Dropout2d(self._dropout_prob)
 
