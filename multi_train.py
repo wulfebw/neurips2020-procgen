@@ -238,6 +238,7 @@ def set_env_params(config, params, is_recurrent):
 
 def set_ppo_algorithm_params(config, params):
     config["config"]["lr"] = params.learning_rate
+    config["config"]["lr_schedule"] = params.learning_rate_schedule
     config["config"]["num_sgd_iter"] = params.num_sgd_iter
     config["config"]["sgd_minibatch_size"] = params.sampling_params.sgd_minibatch_size
     config["config"]["num_workers"] = params.sampling_params.num_workers
@@ -309,10 +310,15 @@ def get_transform_abbreviation(transform):
 
 def get_ppo_exp_name(params, is_recurrent):
     # Start with the common params.
+    if params.learning_rate_schedule is not None:
+        lr_str = f"lr_sch_{'_'.join(str(v) for y in params.learning_rate_schedule for v in y)}"
+    else:
+        lr_str = f"lr_{params.learning_rate}"
+
     exp_name = "_".join([
         "{}_itr_{}",
         f"{'rnn' if is_recurrent else 'cnn'}",
-        f"lr_{params.learning_rate}",
+        f"{lr_str}",
         # f"sgd_itr_{params.num_sgd_iter}",
         f"filters_{'_'.join(str(v) for v in params.num_filters)}",
         # f"fc_size_{params.fc_size}",
@@ -341,6 +347,7 @@ def get_ppo_exp_name(params, is_recurrent):
 
 def sample_configs(base_config,
                    learning_rate_options=[0.0005],
+                   learning_rate_schedule_options=[None],
                    num_sgd_iter_options=[2],
                    num_filters_options=[[32, 48, 64]],
                    fc_size_options=[256],
@@ -366,6 +373,7 @@ def sample_configs(base_config,
     is_recurrent = get_is_recurrent(base_config)
     parameter_settings = named_product(
         learning_rate=learning_rate_options,
+        learning_rate_schedule=learning_rate_schedule_options,
         num_sgd_iter=num_sgd_iter_options,
         num_filters=num_filters_options,
         fc_size=fc_size_options,
@@ -400,35 +408,16 @@ def write_experiments(base, num_iterations, env_names):
     # configs = sample_configs(copy.deepcopy(base))
     configs = sample_configs(
         copy.deepcopy(base),
-        transforms_options=[
-            [
-                "random_translate",
-                "random_flip_left_right",
-                "random_flip_up_down",
-                "random_rotation",
-            ],
+        learning_rate_schedule_options=[
+            [[0, 0.0005], [5000000, 0.0005], [5000001, 0.00025]],
         ],
     )
-    # configs = sample_configs(
-    #     copy.deepcopy(base),
-    #     auto_drac_params_options=[
-    #         AutoDracParams(
-    #             active=True,
-    #             choose_between_transforms=[
-    #                 "random_translate",
-    #                 "random_flip_left_right",
-    #                 "random_flip_up_down",
-    #             ],
-    #             ucb_options={
-    #                 "q_alpha": 0.01,
-    #                 "mean_reward_alpha": 0.05,
-    #                 "lmbda": 0.25,
-    #                 "ucb_c": 0.02,
-    #                 "internal_reward_mode": "return",
-    #             },
-    #         )
-    #     ],
-    # )
+    configs = sample_configs(
+        copy.deepcopy(base),
+        entropy_coeff_schedule_options=[
+            [[0, 0.01], [5000000, 0.01], [5000001, 0.005]],
+        ],
+    )
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
         for exp_name_template, config in configs.items():
