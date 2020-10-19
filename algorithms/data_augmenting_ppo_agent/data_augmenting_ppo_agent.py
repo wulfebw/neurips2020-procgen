@@ -16,7 +16,7 @@ from ray.rllib.agents.ppo.ppo_torch_policy import (kl_and_loss_stats, vf_preds_f
 from ray.rllib.agents.trainer_template import build_trainer
 from ray.rllib.evaluation.postprocessing import Postprocessing
 from ray.rllib.policy.sample_batch import SampleBatch
-from ray.rllib.policy.torch_policy import EntropyCoeffSchedule
+from ray.rllib.policy.torch_policy import EntropyCoeffSchedule, LearningRateSchedule
 from ray.rllib.policy.torch_policy_template import build_torch_policy
 from ray.rllib.utils import try_import_torch
 from ray.rllib.utils.torch_ops import sequence_mask
@@ -538,7 +538,7 @@ DEFAULT_CONFIG["auto_drac_options"] = {
     "ucb",
     "ucb_options": {
         # This is the number of minibatches per action selection.
-        # It should match train_batch_size * 
+        # It should match train_batch_size / sgd_minibatch_size * num_sgd_iter
         "num_steps_per_update": 64,
         "q_alpha": 0.01,
         "mean_reward_alpha": 0.1,
@@ -550,17 +550,21 @@ DEFAULT_CONFIG["auto_drac_options"] = {
     },
 }
 
-DataAugmentingTorchPolicy = build_torch_policy(
-    name="DataAugmentingTorchPolicy",
-    get_default_config=lambda: DEFAULT_CONFIG,
-    loss_fn=data_augmenting_loss,
-    stats_fn=data_augmenting_stats,
-    extra_action_out_fn=vf_preds_fetches,
-    postprocess_fn=postprocess_sample_batch,
-    extra_grad_process_fn=my_apply_grad_clipping,
-    before_init=setup_config,
-    after_init=after_init_fn,
-    mixins=[KLCoeffMixin, ValueNetworkMixin, EntropyCoeffSchedule])
+DataAugmentingTorchPolicy = build_torch_policy(name="DataAugmentingTorchPolicy",
+                                               get_default_config=lambda: DEFAULT_CONFIG,
+                                               loss_fn=data_augmenting_loss,
+                                               stats_fn=data_augmenting_stats,
+                                               extra_action_out_fn=vf_preds_fetches,
+                                               postprocess_fn=postprocess_sample_batch,
+                                               extra_grad_process_fn=my_apply_grad_clipping,
+                                               before_init=setup_config,
+                                               after_init=after_init_fn,
+                                               mixins=[
+                                                   KLCoeffMixin,
+                                                   ValueNetworkMixin,
+                                                   EntropyCoeffSchedule,
+                                                   LearningRateSchedule,
+                                               ])
 
 
 # Well, this is a bit of a hack, but oh well.
