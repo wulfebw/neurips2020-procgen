@@ -319,14 +319,14 @@ def get_ppo_exp_name(params, is_recurrent):
         f"{params.sampling_params}",
         "_".join([get_transform_abbreviation(t) for t in params.transforms]),
         f"ent_sch_{'_'.join(str(v) for y in params.entropy_coeff_schedule for v in y)}",
-        # f"dropout_{params.dropout_prob}",
+        f"dropout_{params.dropout_prob}",
         # f"drac_{params.drac_weight}",
         f"grad_clip_{str(params.grad_clip_params)}",
         # f"act_fn_{params.fc_activation}",
         # f"weight_init_{params.weight_init}",
         f"rew_norm_alpha_{params.reward_normalization_params['alpha']}",
         f"{str(params.intrinsic_reward_params)}",
-        f"auto_drac_{params.auto_drac_params}"
+        # f"auto_drac_{params.auto_drac_params}"
     ])
 
     # Add the params that only apply in the recurrent or non-recurrent cases.
@@ -400,35 +400,8 @@ def write_experiments(base, num_iterations, env_names):
     # configs = sample_configs(copy.deepcopy(base))
     configs = sample_configs(
         copy.deepcopy(base),
-        transforms_options=[
-            [
-                "random_translate",
-                "random_flip_left_right",
-                "random_flip_up_down",
-                "random_rotation",
-            ],
-        ],
+        dropout_prob_options=[0.01, 0.025, 0.05, 0.1],
     )
-    # configs = sample_configs(
-    #     copy.deepcopy(base),
-    #     auto_drac_params_options=[
-    #         AutoDracParams(
-    #             active=True,
-    #             choose_between_transforms=[
-    #                 "random_translate",
-    #                 "random_flip_left_right",
-    #                 "random_flip_up_down",
-    #             ],
-    #             ucb_options={
-    #                 "q_alpha": 0.01,
-    #                 "mean_reward_alpha": 0.05,
-    #                 "lmbda": 0.25,
-    #                 "ucb_c": 0.02,
-    #                 "internal_reward_mode": "return",
-    #             },
-    #         )
-    #     ],
-    # )
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
         for exp_name_template, config in configs.items():
