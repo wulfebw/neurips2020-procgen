@@ -405,19 +405,7 @@ def sample_configs(base_config,
 
 def write_experiments(base, num_iterations, env_names):
     exps = dict()
-    # configs = sample_configs(copy.deepcopy(base))
-    configs = sample_configs(
-        copy.deepcopy(base),
-        learning_rate_schedule_options=[
-            [[0, 0.0005], [5000000, 0.0005], [5000001, 0.00025]],
-        ],
-    )
-    configs = sample_configs(
-        copy.deepcopy(base),
-        entropy_coeff_schedule_options=[
-            [[0, 0.01], [5000000, 0.01], [5000001, 0.005]],
-        ],
-    )
+    configs = sample_configs(copy.deepcopy(base))
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
         for exp_name_template, config in configs.items():

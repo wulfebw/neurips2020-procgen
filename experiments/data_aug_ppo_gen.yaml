@@ -16,13 +16,13 @@ run_001_drac:
     # === Stop Conditions ===
     ################################################
     stop:
-        timesteps_total: 8000000
+        timesteps_total: 50000000
 
     ################################################
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/ubuntu/experiments/procgen_010
+    local_dir: /home/ubuntu/experiments/procgen_011
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -404,7 +404,7 @@ run_001_drac:
         # === Evaluation Settings ===
         ################################################
         ################################################
-        evaluation_interval: 480 # 568 # unfortunate to have to hardcode this, but not sure how better to do it.
-        evaluation_num_episodes: 2000
+        evaluation_interval: 100 # 568 # unfortunate to have to hardcode this, but not sure how better to do it.
+        evaluation_num_episodes: 100
         evaluation_num_workers: 0
         evaluation_config: {"env_config": {"num_levels": 0, "env_wrapper_options": {"normalize_reward": False}}}
