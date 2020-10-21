@@ -18,6 +18,7 @@ class StateOccupancyCounter(gym.Wrapper):
     def step(self, action):
         obs, rew, done, info = self.env.step(action)
         info["occupancy_count"] = self.update_state_occupancy_count(obs)
+        info["num_unique_states"] = len(self.state_occupancy_counts)
         return obs, rew, done, info
 
     def compute_obs_hash(self, obs):

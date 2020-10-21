@@ -247,9 +247,35 @@ def phasic_data_augmenting_loss(policy, model, dist_class, train_batch, use_data
         raise ValueError(phase)
 
 
+def adapt_policy_parameters_from_batch(policy, train_batch):
+    if not policy.config["adapt_policy_parameters"]:
+        return {}
+
+    assert_msg = "If adapting policy parameters, need to add state occupancy counter wrapper."
+    assert policy.config["env_config"]["env_wrapper_options"]["count_state_occupancy"], assert_msg
+
+    infos = train_batch.get("infos", None)
+    if infos is None or len(infos) == 0:
+        return {}
+
+    if "num_unique_states" not in infos[0]:
+        return {}
+
+    num_unique_states = np.array([info["num_unique_states"] for info in infos])
+    num_timesteps = train_batch["t"].detach().cpu().numpy() + 1
+    fraction_unique = num_unique_states / num_timesteps
+    mean_fraction_unique = fraction_unique.mean()
+
+    # TODO(wulfebw): Implement adaption code.
+
+    return {"mean_fraction_unique_states": mean_fraction_unique}
+
+
 def data_augmenting_loss(policy, model, dist_class, train_batch):
     mode = model.data_augmentation_options["mode"]
     mode_options = model.data_augmentation_options["mode_options"].get(mode, {})
+
+    policy.adaptation_stats = adapt_policy_parameters_from_batch(policy, train_batch)
 
     if mode == "none":
         return no_data_augmenting_loss(policy, model, dist_class, train_batch, **mode_options)
@@ -306,6 +332,12 @@ def add_phasic_stats(policy, stats):
 
 def add_reward_normalization_stats(policy, train_batch, stats):
     stats["reward_norm_value_targets"] = train_batch["value_targets"].detach().mean().cpu().numpy()
+
+
+def add_adaptation_stats(policy, stats):
+    if not hasattr(policy, "adaptation_stats"):
+        return stats
+    stats.update(policy.adaptation_stats)
     return stats
 
 
@@ -317,6 +349,7 @@ def data_augmenting_stats(policy, train_batch):
     stats = add_reward_normalization_stats(policy, train_batch, stats)
     stats = add_auto_drac_stats(policy, stats)
     stats = add_phasic_stats(policy, stats)
+    stats = add_adaptation_stats(policy, stats)
     stats = suppress_nan_and_inf(stats)
     return stats
 
@@ -644,6 +677,8 @@ DEFAULT_CONFIG["use_phasic_optimizer"] = True
 DEFAULT_CONFIG["aux_loss_every_k"] = 32
 DEFAULT_CONFIG["aux_loss_num_sgd_iter"] = 4
 DEFAULT_CONFIG["aux_loss_start_after_num_steps"] = 0
+
+DEFAULT_CONFIG["adapt_policy_parameters"] = True
 
 DataAugmentingTorchPolicy = build_torch_policy(name="DataAugmentingTorchPolicy",
                                                get_default_config=lambda: DEFAULT_CONFIG,
