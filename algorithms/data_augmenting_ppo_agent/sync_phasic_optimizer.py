@@ -97,6 +97,7 @@ class SyncPhasicOptimizer(PolicyOptimizer):
             samples["phase"] = np.ones_like(samples["phase"])
             do_minibatch_sgd(samples, self.policies, self.workers.local_worker(),
                              self.aux_loss_num_sgd_iter, self.sgd_minibatch_size, [])
+            self.memory = []
         return self.learner_stats
 
     def _add_policy_logits(self, samples):

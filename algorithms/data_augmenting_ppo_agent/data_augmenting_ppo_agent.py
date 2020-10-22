@@ -206,8 +206,11 @@ def phasic_aux_loss(policy, model, dist_class, train_batch):
 
 
 def phasic_policy_loss(policy, model, dist_class, train_batch):
-    # TODO: Stop gradient from value from backpropagating to the feature extractor.
-    return no_data_augmenting_loss(policy, model, dist_class, train_batch)
+    model.detach_value_head()
+    logits, state = model.from_batch(train_batch)
+    model.attach_value_head()
+    action_dist = dist_class(logits, model)
+    return compute_ppo_loss(policy, dist_class, model, train_batch, action_dist, state)
 
 
 def get_phase_from_train_batch(train_batch):
@@ -615,7 +618,7 @@ DEFAULT_CONFIG["auto_drac_options"] = {
 
 DEFAULT_CONFIG["use_phasic_optimizer"] = True
 DEFAULT_CONFIG["aux_loss_every_k"] = 8
-DEFAULT_CONFIG["aux_loss_num_sgd_iter"] = 4
+DEFAULT_CONFIG["aux_loss_num_sgd_iter"] = 3
 
 DataAugmentingTorchPolicy = build_torch_policy(name="DataAugmentingTorchPolicy",
                                                get_default_config=lambda: DEFAULT_CONFIG,
