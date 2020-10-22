@@ -427,6 +427,7 @@ def write_experiments(base, num_iterations, env_names):
     # configs = sample_configs(copy.deepcopy(base))
     configs = sample_configs(
         copy.deepcopy(base),
+        grad_clip_params_options=[PPOGradClipParams(1.0, "constant", 1.0, 0.1, 95, 100)],
         phasic_params_options=[PhasicParams(active=True)],
     )
     for env_name in env_names:
