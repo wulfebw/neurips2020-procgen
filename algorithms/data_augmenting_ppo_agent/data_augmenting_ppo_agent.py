@@ -26,6 +26,7 @@ from algorithms.data_augmenting_ppo_agent.ppo_utils import (compute_running_mean
                                                             RunningStat,
                                                             ExpWeightedMovingAverageStat)
 from algorithms.data_augmenting_ppo_agent.ucb_learner import UCBLearner
+from algorithms.data_augmenting_ppo_agent.sync_phasic_optimizer import SyncPhasicOptimizer
 
 torch, nn = try_import_torch()
 logger = logging.getLogger(__name__)
@@ -177,6 +178,57 @@ def no_data_augmenting_loss(policy, model, dist_class, train_batch):
     return compute_ppo_loss(policy, dist_class, model, train_batch, action_dist, state)
 
 
+def phasic_aux_loss(policy, model, dist_class, train_batch):
+    assert "pre_aux_logits" in train_batch
+
+    # Forward through model.
+    logits, _ = model.from_batch(train_batch)
+    new_action_dist = dist_class(logits, model)
+    value = model.value_function()
+
+    # Behavioral cloning loss.
+    old_action_dist = dist_class(train_batch["pre_aux_logits"], model)
+    bc_loss = old_action_dist.kl(new_action_dist).mean()
+
+    # Value function loss.
+    value_targets = train_batch["value_targets"]
+    value_loss = 0.5 * ((value - value_targets)**2).mean()
+
+    # Overall.
+    aux_loss = bc_loss + value_loss
+
+    # Set these to report later in metrics.
+    policy.aux_bc_loss = bc_loss
+    policy.aux_value_loss = value_loss
+    policy.aux_loss = aux_loss
+
+    return aux_loss
+
+
+def phasic_policy_loss(policy, model, dist_class, train_batch):
+    # TODO: Stop gradient from value from backpropagating to the feature extractor.
+    return no_data_augmenting_loss(policy, model, dist_class, train_batch)
+
+
+def get_phase_from_train_batch(train_batch):
+    if "phase" not in train_batch:
+        raise ValueError("Train batch must contain phase key.")
+    if train_batch["phase"][0] == 0:
+        return "policy"
+    else:
+        return "aux"
+
+
+def phasic_data_augmenting_loss(policy, model, dist_class, train_batch, **kwargs):
+    phase = get_phase_from_train_batch(train_batch)
+    if phase == "policy":
+        return phasic_policy_loss(policy, model, dist_class, train_batch)
+    elif phase == "aux":
+        return phasic_aux_loss(policy, model, dist_class, train_batch)
+    else:
+        raise ValueError(phase)
+
+
 def data_augmenting_loss(policy, model, dist_class, train_batch):
     mode = model.data_augmentation_options["mode"]
     mode_options = model.data_augmentation_options["mode_options"].get(mode, {})
@@ -187,6 +239,8 @@ def data_augmenting_loss(policy, model, dist_class, train_batch):
         return simple_data_augmenting_loss(policy, model, dist_class, train_batch, **mode_options)
     elif mode == "drac":
         return drac_data_augmenting_loss(policy, model, dist_class, train_batch, **mode_options)
+    elif mode == "phasic":
+        return phasic_data_augmenting_loss(policy, model, dist_class, train_batch, **mode_options)
     else:
         raise ValueError(f"Invalid data augmenting mode: {model.data_augmentation_options['mode']}")
 
@@ -224,11 +278,20 @@ def add_auto_drac_stats(policy, stats):
     return stats
 
 
+def add_phasic_stats(policy, stats):
+    phasic_stats_keys = ["aux_bc_loss", "aux_value_loss", "aux_loss"]
+    for key in phasic_stats_keys:
+        if hasattr(policy, key):
+            stats[key] = getattr(policy, key)
+    return stats
+
+
 def data_augmenting_stats(policy, train_batch):
     stats = kl_and_loss_stats(policy, train_batch)
     if hasattr(policy.loss_obj, "data_aug_loss"):
         stats["drac_loss_unweighted"] = policy.loss_obj.data_aug_loss
     stats = add_auto_drac_stats(policy, stats)
+    stats = add_phasic_stats(policy, stats)
     stats = suppress_nan_and_inf(stats)
     return stats
 
@@ -550,6 +613,10 @@ DEFAULT_CONFIG["auto_drac_options"] = {
     },
 }
 
+DEFAULT_CONFIG["use_phasic_optimizer"] = True
+DEFAULT_CONFIG["aux_loss_every_k"] = 8
+DEFAULT_CONFIG["aux_loss_num_sgd_iter"] = 4
+
 DataAugmentingTorchPolicy = build_torch_policy(name="DataAugmentingTorchPolicy",
                                                get_default_config=lambda: DEFAULT_CONFIG,
                                                loss_fn=data_augmenting_loss,
@@ -613,11 +680,26 @@ def my_validate_config(config):
     validate_config(config)
 
 
+def phasic_choose_policy_optimizer(workers, config):
+    if config["use_phasic_optimizer"]:
+        return SyncPhasicOptimizer(
+            workers,
+            num_sgd_iter=config["num_sgd_iter"],
+            train_batch_size=config["train_batch_size"],
+            sgd_minibatch_size=config["sgd_minibatch_size"],
+            standardize_fields=["advantages"],
+            aux_loss_every_k=config["aux_loss_every_k"],
+            aux_loss_num_sgd_iter=config["aux_loss_num_sgd_iter"],
+        )
+    else:
+        return choose_policy_optimizer(workers, config)
+
+
 DataAugmentingPPOTrainer = build_trainer(name="data_augmenting_ppo_trainer",
                                          default_config=DEFAULT_CONFIG,
                                          default_policy=DataAugmentingTorchPolicy,
                                          get_policy_class=get_policy_class,
-                                         make_policy_optimizer=choose_policy_optimizer,
+                                         make_policy_optimizer=phasic_choose_policy_optimizer,
                                          validate_config=my_validate_config,
                                          after_optimizer_step=update_kl,
                                          after_train_result=warn_about_bad_reward_scales)

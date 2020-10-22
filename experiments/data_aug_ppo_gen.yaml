@@ -22,7 +22,7 @@ run_001_drac:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/ubuntu/experiments/procgen_010
+    local_dir: /home/wulfebw/experiments/procgen_000
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -36,7 +36,7 @@ run_001_drac:
         ################################################
         env_config:
             # Name of the procgen environment to train on # Note, that this parameter will be overriden during the evaluation by the AIcrowd evaluators.
-            env_name: caveflyer # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
+            env_name: coinrun # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
             # The number of unique levels that can be generated. Set to 0 to use unlimited levels
             num_levels: 200
             # The lowest seed that will be used to generated levels. 'start_level' and 'num_levels' fully specify the set of possible levels
@@ -97,10 +97,10 @@ run_001_drac:
         lr: 5.0e-4
         # Number of SGD iterations in each outer loop (i.e., number of epochs to
         # execute per train batch).
-        num_sgd_iter: 2
+        num_sgd_iter: 1 # 2
         # Total SGD batch size across all devices for SGD. This defines the
         # minibatch size within each epoch.
-        sgd_minibatch_size: 1024 # 1760 # 880 # 2048 # 8 minibatches per epoch
+        sgd_minibatch_size: 512 # 1760 # 880 # 2048 # 8 minibatches per epoch
         # Training batch size, if applicable. Should be >= rollout_fragment_length.
         # Samples batches will be concatenated together to a batch of this size,
         # which is then passed to SGD.
@@ -269,12 +269,14 @@ run_001_drac:
             custom_model: custom_impala_cnn_torch
             # Extra options to pass to custom class
             custom_options: {
-              "num_filters": [32, 48, 64],
+              # "num_filters": [32, 48, 64],
+              "num_filters": [16, 32, 32],
               "weight_init": "default",
               "data_augmentation_options": {
-                "mode": "drac",
+                "mode": "phasic", # drac
                 "mode_options": {
-                  "drac": {"drac_weight": 0.2, "drac_value_weight": 1, "drac_policy_weight": 1}
+                  "drac": {"drac_weight": 0.2, "drac_value_weight": 1, "drac_policy_weight": 1},
+                  "phasic": {},
                 },
                 "transforms": ["random_translate"],
               },
