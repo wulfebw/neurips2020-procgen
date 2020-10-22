@@ -22,7 +22,7 @@ run_001_drac:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/wulfebw/experiments/procgen_000
+    local_dir: /home/ubuntu/experiments/procgen_012
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -127,8 +127,8 @@ run_001_drac:
         grad_clip: 1.0
         grad_clip_elementwise: 1.0
         grad_clip_options: {
-          "mode": "adaptive",
-          "adaptive_max": 5.0,
+          "mode": "constant",
+          "adaptive_max": 1.0,
           "adaptive_min": 0.1,
           "adaptive_percentile": 95,
           "adaptive_buffer_size": 128,
@@ -205,6 +205,10 @@ run_001_drac:
             "internal_reward_mode": "return",
           },
         }
+
+        use_phasic_optimizer: True
+        aux_loss_every_k: 8
+        aux_loss_num_sgd_iter: 3
         
         ################################################
         ################################################
@@ -269,8 +273,7 @@ run_001_drac:
             custom_model: custom_impala_cnn_torch
             # Extra options to pass to custom class
             custom_options: {
-              # "num_filters": [32, 48, 64],
-              "num_filters": [16, 32, 32],
+              "num_filters": [32, 48, 64],
               "weight_init": "default",
               "data_augmentation_options": {
                 "mode": "phasic", # drac

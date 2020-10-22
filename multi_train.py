@@ -202,6 +202,19 @@ class AutoDracParams:
         ])
 
 
+class PhasicParams:
+    def __init__(self, active=False, aux_loss_every_k=8, aux_loss_num_sgd_iter=3):
+        self.active = active
+        self.aux_loss_every_k = aux_loss_every_k
+        self.aux_loss_num_sgd_iter = aux_loss_num_sgd_iter
+
+    def __repr__(self):
+        if not self.active:
+            return ""
+        else:
+            return f"phasic_{self.aux_loss_every_k}_{self.aux_loss_num_sgd_iter}"
+
+
 def get_is_recurrent(config):
     if "rnn" in config["config"]["model"]["custom_model"]:
         return True
@@ -251,6 +264,9 @@ def set_ppo_algorithm_params(config, params):
     config["config"]["grad_clip_options"] = params.grad_clip_params.options()
     config["config"]["auto_drac_options"] = params.auto_drac_params.options(
         params.sampling_params.total_minibatches_per_train_iteration)
+    config["config"]["use_phasic_optimizer"] = params.phasic_params.active
+    config["config"]["aux_loss_every_k"] = params.phasic_params.aux_loss_every_k
+    config["config"]["aux_loss_num_sgd_iter"] = params.phasic_params.aux_loss_num_sgd_iter
 
     # All that matters is these gpu resource parameters add to 1.
     config["config"]["num_gpus_per_worker"] = params.sampling_params.num_gpus_per_worker
@@ -331,8 +347,9 @@ def get_ppo_exp_name(params, is_recurrent):
         # f"act_fn_{params.fc_activation}",
         # f"weight_init_{params.weight_init}",
         f"rew_norm_alpha_{params.reward_normalization_params['alpha']}",
-        f"{str(params.intrinsic_reward_params)}",
-        f"auto_drac_{params.auto_drac_params}"
+        f"{params.intrinsic_reward_params}",
+        f"auto_drac_{params.auto_drac_params}",
+        f"{params.phasic_params}",
     ])
 
     # Add the params that only apply in the recurrent or non-recurrent cases.
@@ -369,7 +386,8 @@ def sample_configs(base_config,
                    dropout_prob_options=[0.1],
                    drac_weight_options=[0.1],
                    intrinsic_reward_params_options=[IntrinsicRewardParams()],
-                   auto_drac_params_options=[AutoDracParams()]):
+                   auto_drac_params_options=[AutoDracParams()],
+                   phasic_params_options=[PhasicParams()]):
     is_recurrent = get_is_recurrent(base_config)
     parameter_settings = named_product(
         learning_rate=learning_rate_options,
@@ -391,6 +409,7 @@ def sample_configs(base_config,
         drac_weight=drac_weight_options,
         intrinsic_reward_params=intrinsic_reward_params_options,
         auto_drac_params=auto_drac_params_options,
+        phasic_params=phasic_params_options,
     )
     configs = dict()
     for params in parameter_settings:
@@ -408,15 +427,7 @@ def write_experiments(base, num_iterations, env_names):
     # configs = sample_configs(copy.deepcopy(base))
     configs = sample_configs(
         copy.deepcopy(base),
-        learning_rate_schedule_options=[
-            [[0, 0.0005], [5000000, 0.0005], [5000001, 0.00025]],
-        ],
-    )
-    configs = sample_configs(
-        copy.deepcopy(base),
-        entropy_coeff_schedule_options=[
-            [[0, 0.01], [5000000, 0.01], [5000001, 0.005]],
-        ],
+        phasic_params_options=[PhasicParams(active=True)],
     )
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
