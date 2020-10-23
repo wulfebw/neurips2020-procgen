@@ -440,6 +440,7 @@ def write_experiments(base, num_iterations, env_names):
         grad_clip_params_options=[PPOGradClipParams(1.0, "constant", 1.0, 0.1, 95, 100)],
         phasic_params_options=[PhasicParams(active=True)],
         sampling_params_options=[PPOSamplingParams(4, 256, 16, 2048)],
+        num_sgd_iter_options=[1],
     )
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
