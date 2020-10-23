@@ -68,11 +68,12 @@ class PPOSamplingParams:
         return 1 - (self.num_workers * self.num_gpus_per_worker)
 
     @property
+    def train_batch_size(self):
+        return (self.num_workers * self.num_envs_per_worker * self.rollout_fragment_length)
+
+    @property
     def total_minibatches_per_train_iteration(self):
-        train_batch_size = (self.num_workers * self.num_envs_per_worker *
-                            self.rollout_fragment_length)
-        total = int((train_batch_size / self.sgd_minibatch_size) * self.num_sgd_iter)
-        return total
+        return int((self.train_batch_size / self.sgd_minibatch_size) * self.num_sgd_iter)
 
 
 class PPOGradClipParams:
@@ -257,6 +258,7 @@ def set_ppo_algorithm_params(config, params):
     config["config"]["num_workers"] = params.sampling_params.num_workers
     config["config"]["num_envs_per_worker"] = params.sampling_params.num_envs_per_worker
     config["config"]["rollout_fragment_length"] = params.sampling_params.rollout_fragment_length
+    config["config"]["train_batch_size"] = params.sampling_params.train_batch_size
     config["config"]["entropy_coeff_schedule"] = params.entropy_coeff_schedule
     config["config"]["reward_normalization_options"] = params.reward_normalization_params
     config["config"]["grad_clip"] = params.grad_clip_params.grad_clip
@@ -439,7 +441,7 @@ def write_experiments(base, num_iterations, env_names):
         copy.deepcopy(base),
         grad_clip_params_options=[PPOGradClipParams(1.0, "constant", 1.0, 0.1, 95, 100)],
         phasic_params_options=[PhasicParams(active=True)],
-        sampling_params_options=[PPOSamplingParams(4, 256, 16, 2048)],
+        sampling_params_options=[PPOSamplingParams(7, 146, 16, 2044)],
         num_sgd_iter_options=[1],
     )
     for env_name in env_names:

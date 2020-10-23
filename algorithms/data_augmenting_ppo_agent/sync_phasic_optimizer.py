@@ -47,7 +47,9 @@ class SyncPhasicOptimizer(PolicyOptimizer):
         self.memory = []
         # Assert that train batch size is divisible by sgd minibatch size to make populating
         # policy logits simpler.
-        assert train_batch_size % sgd_minibatch_size == 0
+        assert train_batch_size % sgd_minibatch_size == 0, (
+            f"train_batch_size: {train_batch_size}"
+            f"sgd_minibatch_size: {sgd_minibatch_size}")
 
     @override(PolicyOptimizer)
     def step(self):
