@@ -631,7 +631,7 @@ DEFAULT_CONFIG["auto_drac_options"] = {
 DEFAULT_CONFIG["use_phasic_optimizer"] = True
 DEFAULT_CONFIG["aux_loss_every_k"] = 8
 DEFAULT_CONFIG["aux_loss_num_sgd_iter"] = 3
-DEFAULT_CONFIG["aux_loss_start_after_num_steps"] = 500_000
+DEFAULT_CONFIG["aux_loss_start_after_num_steps"] = 0
 
 DataAugmentingTorchPolicy = build_torch_policy(name="DataAugmentingTorchPolicy",
                                                get_default_config=lambda: DEFAULT_CONFIG,

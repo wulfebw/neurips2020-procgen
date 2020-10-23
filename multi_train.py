@@ -211,7 +211,7 @@ class PhasicParams:
         aux_loss_num_sgd_iter=3,
         use_data_aug=False,
         policy_loss_mode="drac",
-        aux_loss_start_after_num_steps=500_000,
+        aux_loss_start_after_num_steps=250_000,
     ):
         self.active = active
         self.aux_loss_every_k = aux_loss_every_k
@@ -474,7 +474,7 @@ def write_experiments(base, num_iterations, env_names):
                 aux_loss_num_sgd_iter=3,
                 use_data_aug=True,
                 policy_loss_mode="drac",
-                aux_loss_start_after_num_steps=500_000,
+                aux_loss_start_after_num_steps=250_000,
             ),
         ],
         sampling_params_options=[PPOSamplingParams(7, 146, 16, 1022)],
