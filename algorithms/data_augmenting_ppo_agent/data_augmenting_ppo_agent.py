@@ -187,7 +187,9 @@ def phasic_aux_loss(policy, model, dist_class, train_batch, use_data_aug):
                                                         model.data_augmentation_options)
 
     # Forward through model.
+    model.norm_layers_active = True
     logits, _ = model.from_batch(train_batch)
+    model.norm_layers_active = False
     new_action_dist = dist_class(logits, model)
     value = model.value_function()
 
@@ -210,27 +212,32 @@ def phasic_aux_loss(policy, model, dist_class, train_batch, use_data_aug):
     return aux_loss
 
 
-def phasic_policy_loss(policy, model, dist_class, train_batch):
+def phasic_policy_loss(policy, model, dist_class, train_batch, policy_loss_mode):
     model.detach_value_head()
-    logits, state = model.from_batch(train_batch)
+    if policy_loss_mode == "simple":
+        ret = no_data_augmenting_loss(policy, model, dist_class, train_batch)
+    elif policy_loss_mode == "drac":
+        drac_options = model.data_augmentation_options["mode_options"].get("drac", {})
+        ret = drac_data_augmenting_loss(policy, model, dist_class, train_batch, **drac_options)
+    else:
+        raise ValueError(policy_loss_mode)
     model.attach_value_head()
-    action_dist = dist_class(logits, model)
-    return compute_ppo_loss(policy, dist_class, model, train_batch, action_dist, state)
+    return ret
 
 
 def get_phase_from_train_batch(train_batch):
-    if "phase" not in train_batch:
-        raise ValueError("Train batch must contain phase key.")
+    assert "phase" in train_batch, "Train batch must contain phase key."
     if train_batch["phase"][0] == 0:
         return "policy"
     else:
         return "aux"
 
 
-def phasic_data_augmenting_loss(policy, model, dist_class, train_batch, use_data_aug):
+def phasic_data_augmenting_loss(policy, model, dist_class, train_batch, use_data_aug,
+                                policy_loss_mode):
     phase = get_phase_from_train_batch(train_batch)
     if phase == "policy":
-        return phasic_policy_loss(policy, model, dist_class, train_batch)
+        return phasic_policy_loss(policy, model, dist_class, train_batch, policy_loss_mode)
     elif phase == "aux":
         return phasic_aux_loss(policy, model, dist_class, train_batch, use_data_aug)
     else:
@@ -624,6 +631,7 @@ DEFAULT_CONFIG["auto_drac_options"] = {
 DEFAULT_CONFIG["use_phasic_optimizer"] = True
 DEFAULT_CONFIG["aux_loss_every_k"] = 8
 DEFAULT_CONFIG["aux_loss_num_sgd_iter"] = 3
+DEFAULT_CONFIG["aux_loss_start_after_num_steps"] = 500_000
 
 DataAugmentingTorchPolicy = build_torch_policy(name="DataAugmentingTorchPolicy",
                                                get_default_config=lambda: DEFAULT_CONFIG,
@@ -698,6 +706,7 @@ def phasic_choose_policy_optimizer(workers, config):
             standardize_fields=["advantages"],
             aux_loss_every_k=config["aux_loss_every_k"],
             aux_loss_num_sgd_iter=config["aux_loss_num_sgd_iter"],
+            aux_loss_start_after_num_steps=config["aux_loss_start_after_num_steps"],
         )
     else:
         return choose_policy_optimizer(workers, config)

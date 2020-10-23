@@ -152,12 +152,12 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
     @override(TorchModelV2)
     def forward(self, input_dict, state, seq_lens):
         x = input_dict["obs"].float()
-        # is_training = input_dict["is_training"]
+        is_training = input_dict["is_training"]
 
-        if self._in_rollout(x) or not self.norm_layers_active:
-            self.set_norm_layer_mode("eval")
-        else:
+        if is_training and self.norm_layers_active:
             self.set_norm_layer_mode("train")
+        else:
+            self.set_norm_layer_mode("eval")
 
         x = x / 255.0  # scale to 0-1
         x = x.permute(0, 3, 1, 2)  # NHWC => NCHW
@@ -191,9 +191,6 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
 
         self._value = value.squeeze(1)
         return logits, state
-
-    def _in_rollout(self, x):
-        return len(x) < 512
 
     def set_norm_layer_mode(self, mode):
         if mode == "train":

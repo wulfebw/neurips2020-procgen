@@ -26,7 +26,8 @@ class SyncPhasicOptimizer(PolicyOptimizer):
                  sgd_minibatch_size=0,
                  standardize_fields=frozenset([]),
                  aux_loss_every_k=16,
-                 aux_loss_num_sgd_iter=9):
+                 aux_loss_num_sgd_iter=9,
+                 aux_loss_start_after_num_steps=0):
         PolicyOptimizer.__init__(self, workers)
 
         self.update_weights_timer = TimerStat()
@@ -44,6 +45,7 @@ class SyncPhasicOptimizer(PolicyOptimizer):
 
         self.aux_loss_every_k = aux_loss_every_k
         self.aux_loss_num_sgd_iter = aux_loss_num_sgd_iter
+        self.aux_loss_start_after_num_steps = aux_loss_start_after_num_steps
         self.memory = []
         # Assert that train batch size is divisible by sgd minibatch size to make populating
         # policy logits simpler.
@@ -90,19 +92,21 @@ class SyncPhasicOptimizer(PolicyOptimizer):
         self.num_steps_sampled += samples.count
         self.num_steps_trained += samples.count
 
-        # Add samples to the memory to be provided to the aux loss.
-        self._remove_unnecessary_data(samples)
-        self.memory.append(samples)
+        if self.num_steps_sampled > self.aux_loss_start_after_num_steps:
+            # Add samples to the memory to be provided to the aux loss.
+            self._remove_unnecessary_data(samples)
+            self.memory.append(samples)
 
-        # Optionally run the aux optimization.
-        if len(self.memory) == self.aux_loss_every_k:
-            samples = SampleBatch.concat_samples(self.memory)
-            self._add_policy_logits(samples)
-            # Ones indicate aux phase.
-            samples["phase"] = np.ones_like(samples["phase"])
-            do_minibatch_sgd(samples, self.policies, self.workers.local_worker(),
-                             self.aux_loss_num_sgd_iter, self.sgd_minibatch_size, [])
-            self.memory = []
+            # Optionally run the aux optimization.
+            if len(self.memory) >= self.aux_loss_every_k:
+                samples = SampleBatch.concat_samples(self.memory)
+                self._add_policy_logits(samples)
+                # Ones indicate aux phase.
+                samples["phase"] = np.ones_like(samples["phase"])
+                do_minibatch_sgd(samples, self.policies, self.workers.local_worker(),
+                                 self.aux_loss_num_sgd_iter, self.sgd_minibatch_size, [])
+                self.memory = []
+
         return self.learner_stats
 
     def _remove_unnecessary_data(self,

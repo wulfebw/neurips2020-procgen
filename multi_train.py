@@ -204,21 +204,38 @@ class AutoDracParams:
 
 
 class PhasicParams:
-    def __init__(self,
-                 active=False,
-                 aux_loss_every_k=8,
-                 aux_loss_num_sgd_iter=3,
-                 use_data_aug=False):
+    def __init__(
+        self,
+        active=False,
+        aux_loss_every_k=8,
+        aux_loss_num_sgd_iter=3,
+        use_data_aug=False,
+        policy_loss_mode="drac",
+        aux_loss_start_after_num_steps=500_000,
+    ):
         self.active = active
         self.aux_loss_every_k = aux_loss_every_k
         self.aux_loss_num_sgd_iter = aux_loss_num_sgd_iter
         self.use_data_aug = use_data_aug
+        self.policy_loss_mode = policy_loss_mode
+        self.aux_loss_start_after_num_steps = aux_loss_start_after_num_steps
+
+    def options(self):
+        return dict(
+            use_data_aug=self.use_data_aug,
+            policy_loss_mode=self.policy_loss_mode,
+        )
 
     def __repr__(self):
         if not self.active:
             return ""
 
-        rep = f"phasic_{self.aux_loss_every_k}_{self.aux_loss_num_sgd_iter}"
+        rep = "_".join([
+            f"phasic_{self.aux_loss_every_k}",
+            f"{self.aux_loss_num_sgd_iter}",
+            f"{self.policy_loss_mode}",
+            f"{self.aux_loss_start_after_num_steps}",
+        ])
         if self.use_data_aug:
             rep += "_w_data_aug"
         return rep
@@ -277,6 +294,8 @@ def set_ppo_algorithm_params(config, params):
     config["config"]["use_phasic_optimizer"] = params.phasic_params.active
     config["config"]["aux_loss_every_k"] = params.phasic_params.aux_loss_every_k
     config["config"]["aux_loss_num_sgd_iter"] = params.phasic_params.aux_loss_num_sgd_iter
+    config["config"][
+        "aux_loss_start_after_num_steps"] = params.phasic_params.aux_loss_start_after_num_steps
 
     # All that matters is these gpu resource parameters add to 1.
     config["config"]["num_gpus_per_worker"] = params.sampling_params.num_gpus_per_worker
@@ -315,9 +334,7 @@ def set_ppo_model_params(config, params, is_recurrent):
                     "drac_policy_weight": 1,
                     "recurrent_repeat_transform": True,
                 },
-                "phasic": {
-                    "use_data_aug": params.phasic_params.use_data_aug,
-                },
+                "phasic": params.phasic_params.options(),
             },
             "transforms": params.transforms,
         },
@@ -451,10 +468,16 @@ def write_experiments(base, num_iterations, env_names):
         copy.deepcopy(base),
         grad_clip_params_options=[PPOGradClipParams(1.0, "constant", 1.0, 0.1, 95, 100)],
         phasic_params_options=[
-            PhasicParams(active=True, use_data_aug=True),
-            PhasicParams(active=True, use_data_aug=False),
+            PhasicParams(
+                active=True,
+                aux_loss_every_k=8,
+                aux_loss_num_sgd_iter=3,
+                use_data_aug=True,
+                policy_loss_mode="drac",
+                aux_loss_start_after_num_steps=500_000,
+            ),
         ],
-        sampling_params_options=[PPOSamplingParams(7, 146, 16, 2044)],
+        sampling_params_options=[PPOSamplingParams(7, 146, 16, 1022)],
         num_sgd_iter_options=[1],
     )
     for env_name in env_names:
