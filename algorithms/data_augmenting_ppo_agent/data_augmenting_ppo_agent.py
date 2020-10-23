@@ -178,8 +178,13 @@ def no_data_augmenting_loss(policy, model, dist_class, train_batch):
     return compute_ppo_loss(policy, dist_class, model, train_batch, action_dist, state)
 
 
-def phasic_aux_loss(policy, model, dist_class, train_batch):
+def phasic_aux_loss(policy, model, dist_class, train_batch, use_data_aug):
     assert "pre_aux_logits" in train_batch
+
+    if use_data_aug:
+        assert len(model.data_augmentation_options["transforms"]) > 0
+        train_batch["obs"], _ = apply_data_augmentation(train_batch["obs"],
+                                                        model.data_augmentation_options)
 
     # Forward through model.
     logits, _ = model.from_batch(train_batch)
@@ -222,12 +227,12 @@ def get_phase_from_train_batch(train_batch):
         return "aux"
 
 
-def phasic_data_augmenting_loss(policy, model, dist_class, train_batch, **kwargs):
+def phasic_data_augmenting_loss(policy, model, dist_class, train_batch, use_data_aug):
     phase = get_phase_from_train_batch(train_batch)
     if phase == "policy":
         return phasic_policy_loss(policy, model, dist_class, train_batch)
     elif phase == "aux":
-        return phasic_aux_loss(policy, model, dist_class, train_batch)
+        return phasic_aux_loss(policy, model, dist_class, train_batch, use_data_aug)
     else:
         raise ValueError(phase)
 

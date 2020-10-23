@@ -204,16 +204,24 @@ class AutoDracParams:
 
 
 class PhasicParams:
-    def __init__(self, active=False, aux_loss_every_k=8, aux_loss_num_sgd_iter=3):
+    def __init__(self,
+                 active=False,
+                 aux_loss_every_k=8,
+                 aux_loss_num_sgd_iter=3,
+                 use_data_aug=False):
         self.active = active
         self.aux_loss_every_k = aux_loss_every_k
         self.aux_loss_num_sgd_iter = aux_loss_num_sgd_iter
+        self.use_data_aug = use_data_aug
 
     def __repr__(self):
         if not self.active:
             return ""
-        else:
-            return f"phasic_{self.aux_loss_every_k}_{self.aux_loss_num_sgd_iter}"
+
+        rep = f"phasic_{self.aux_loss_every_k}_{self.aux_loss_num_sgd_iter}"
+        if self.use_data_aug:
+            rep += "_w_data_aug"
+        return rep
 
 
 def get_is_recurrent(config):
@@ -307,7 +315,9 @@ def set_ppo_model_params(config, params, is_recurrent):
                     "drac_policy_weight": 1,
                     "recurrent_repeat_transform": True,
                 },
-                "phasic": {},
+                "phasic": {
+                    "use_data_aug": params.phasic_params.use_data_aug,
+                },
             },
             "transforms": params.transforms,
         },
@@ -440,7 +450,10 @@ def write_experiments(base, num_iterations, env_names):
     configs = sample_configs(
         copy.deepcopy(base),
         grad_clip_params_options=[PPOGradClipParams(1.0, "constant", 1.0, 0.1, 95, 100)],
-        phasic_params_options=[PhasicParams(active=True)],
+        phasic_params_options=[
+            PhasicParams(active=True, use_data_aug=True),
+            PhasicParams(active=True, use_data_aug=False),
+        ],
         sampling_params_options=[PPOSamplingParams(7, 146, 16, 2044)],
         num_sgd_iter_options=[1],
     )
