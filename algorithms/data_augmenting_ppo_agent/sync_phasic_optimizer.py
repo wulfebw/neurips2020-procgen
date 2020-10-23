@@ -3,6 +3,7 @@ import logging
 import numpy as np
 
 import ray
+from ray.rllib.evaluation.postprocessing import Postprocessing
 from ray.rllib.optimizers.policy_optimizer import PolicyOptimizer
 from ray.rllib.policy.sample_batch import SampleBatch, DEFAULT_POLICY_ID
 from ray.rllib.utils.annotations import override
@@ -68,11 +69,9 @@ class SyncPhasicOptimizer(PolicyOptimizer):
             samples = SampleBatch.concat_samples(samples)
             self.sample_timer.push_units_processed(samples.count)
 
-        # Add samples to the memory to be provided to the aux loss.
-        self.memory.append(samples)
-
         # Unfortunate to have to hack it like this, but not sure how else to do it.
         # Setting the phase to zeros results in policy optimization, and to ones results in aux optimization.
+        # These have to be added prior to the policy sgd.
         samples["phase"] = np.zeros(samples.count)
 
         with self.grad_timer:
@@ -89,6 +88,10 @@ class SyncPhasicOptimizer(PolicyOptimizer):
         self.num_steps_sampled += samples.count
         self.num_steps_trained += samples.count
 
+        # Add samples to the memory to be provided to the aux loss.
+        self._remove_unnecessary_data(samples)
+        self.memory.append(samples)
+
         # Optionally run the aux optimization.
         if len(self.memory) == self.aux_loss_every_k:
             samples = SampleBatch.concat_samples(self.memory)
@@ -99,6 +102,19 @@ class SyncPhasicOptimizer(PolicyOptimizer):
                              self.aux_loss_num_sgd_iter, self.sgd_minibatch_size, [])
             self.memory = []
         return self.learner_stats
+
+    def _remove_unnecessary_data(self,
+                                 samples,
+                                 keys_to_keep=set([
+                                     SampleBatch.CUR_OBS,
+                                     SampleBatch.PREV_ACTIONS,
+                                     SampleBatch.PREV_REWARDS,
+                                     "phase",
+                                     Postprocessing.VALUE_TARGETS,
+                                 ])):
+        for key in list(samples.keys()):
+            if key not in keys_to_keep:
+                del samples.data[key]
 
     def _add_policy_logits(self, samples):
         with torch.no_grad():
