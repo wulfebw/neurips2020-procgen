@@ -274,6 +274,15 @@ def set_ppo_algorithm_params(config, params):
     return config
 
 
+def get_trainer_mode(params):
+    if params.phasic_params.active:
+        return "phasic"
+    elif len(params.transforms) > 0:
+        return "drac"
+    else:
+        return "none"
+
+
 def set_ppo_model_params(config, params, is_recurrent):
     if is_recurrent:
         config["config"]["model"]["max_seq_len"] = params.max_seq_len
@@ -287,7 +296,7 @@ def set_ppo_model_params(config, params, is_recurrent):
         "prev_action_mode": "concat",
         "weight_init": params.weight_init,
         "data_augmentation_options": {
-            "mode": "drac" if len(params.transforms) > 0 else "none",
+            "mode": get_trainer_mode(params),
             "augmentation_mode": "independent",
             "mode_options": {
                 "drac": {
@@ -295,7 +304,8 @@ def set_ppo_model_params(config, params, is_recurrent):
                     "drac_value_weight": 1,
                     "drac_policy_weight": 1,
                     "recurrent_repeat_transform": True,
-                }
+                },
+                "phasic": {},
             },
             "transforms": params.transforms,
         },
@@ -429,6 +439,7 @@ def write_experiments(base, num_iterations, env_names):
         copy.deepcopy(base),
         grad_clip_params_options=[PPOGradClipParams(1.0, "constant", 1.0, 0.1, 95, 100)],
         phasic_params_options=[PhasicParams(active=True)],
+        sampling_params_options=[PPOSamplingParams(4, 256, 16, 2048)],
     )
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
