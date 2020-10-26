@@ -127,7 +127,7 @@ class PPOGradClipParams:
 class IntrinsicRewardParams:
     def __init__(
         self,
-        use_noop_penalty=True,
+        use_noop_penalty=False,
         noop_penalty_options={"reward": -0.1},
         use_state_revisitation_penalty=False,
         state_revisitation_penalty_options={"reward": -0.01},
@@ -204,26 +204,27 @@ class AutoDracParams:
 
 
 class PhasicParams:
-    def __init__(
-        self,
-        active=False,
-        aux_loss_every_k=8,
-        aux_loss_num_sgd_iter=3,
-        use_data_aug=False,
-        policy_loss_mode="drac",
-        aux_loss_start_after_num_steps=250_000,
-    ):
+    def __init__(self,
+                 active=False,
+                 aux_loss_every_k=8,
+                 aux_loss_num_sgd_iter=3,
+                 use_data_aug=False,
+                 policy_loss_mode="drac",
+                 aux_loss_start_after_num_steps=0,
+                 detach_value_head=False):
         self.active = active
         self.aux_loss_every_k = aux_loss_every_k
         self.aux_loss_num_sgd_iter = aux_loss_num_sgd_iter
         self.use_data_aug = use_data_aug
         self.policy_loss_mode = policy_loss_mode
         self.aux_loss_start_after_num_steps = aux_loss_start_after_num_steps
+        self.detach_value_head = detach_value_head
 
     def options(self):
         return dict(
             use_data_aug=self.use_data_aug,
             policy_loss_mode=self.policy_loss_mode,
+            detach_value_head=self.detach_value_head,
         )
 
     def __repr__(self):
@@ -235,6 +236,7 @@ class PhasicParams:
             f"{self.aux_loss_num_sgd_iter}",
             f"{self.policy_loss_mode}",
             f"{self.aux_loss_start_after_num_steps}",
+            f"detach_{self.detach_value_head}",
         ])
         if self.use_data_aug:
             rep += "_w_data_aug"
@@ -284,6 +286,7 @@ def set_ppo_algorithm_params(config, params):
     config["config"]["num_envs_per_worker"] = params.sampling_params.num_envs_per_worker
     config["config"]["rollout_fragment_length"] = params.sampling_params.rollout_fragment_length
     config["config"]["train_batch_size"] = params.sampling_params.train_batch_size
+    config["config"]["vf_loss_coeff"] = params.vf_loss_coeff
     config["config"]["entropy_coeff_schedule"] = params.entropy_coeff_schedule
     config["config"]["reward_normalization_options"] = params.reward_normalization_params
     config["config"]["grad_clip"] = params.grad_clip_params.grad_clip
@@ -375,12 +378,13 @@ def get_ppo_exp_name(params, is_recurrent):
         f"{'rnn' if is_recurrent else 'cnn'}",
         f"{lr_str}",
         # f"sgd_itr_{params.num_sgd_iter}",
-        f"filters_{'_'.join(str(v) for v in params.num_filters)}",
+        # f"filters_{'_'.join(str(v) for v in params.num_filters)}",
         # f"fc_size_{params.fc_size}",
         f"{params.sampling_params}",
         "_".join([get_transform_abbreviation(t) for t in params.transforms]),
         f"ent_sch_{'_'.join(str(v) for y in params.entropy_coeff_schedule for v in y)}",
         # f"dropout_{params.dropout_prob}",
+        f"vf_loss_coeff_{params.vf_loss_coeff}",
         # f"drac_{params.drac_weight}",
         f"grad_clip_{str(params.grad_clip_params)}",
         # f"act_fn_{params.fc_activation}",
@@ -409,7 +413,7 @@ def sample_configs(base_config,
                    fc_size_options=[256],
                    lstm_cell_size_options=[256],
                    weight_init_options=["default"],
-                   sampling_params_options=[PPOSamplingParams(4, 256, 16, 1024)],
+                   sampling_params_options=[PPOSamplingParams(7, 141, 16, 1974)],
                    max_seq_len_options=[16],
                    reward_normalization_params_options=[{
                        "mode": "running_return",
@@ -421,12 +425,13 @@ def sample_configs(base_config,
                        [[0, 0.01]],
                    ],
                    fc_activation_options=["relu"],
-                   grad_clip_params_options=[PPOGradClipParams(1.0, "adaptive", 5.0, 0.1, 95, 100)],
+                   grad_clip_params_options=[PPOGradClipParams(1.0, "adaptive", 5.0, 0.1, 95, 128)],
                    dropout_prob_options=[0.1],
                    drac_weight_options=[0.1],
                    intrinsic_reward_params_options=[IntrinsicRewardParams()],
                    auto_drac_params_options=[AutoDracParams()],
-                   phasic_params_options=[PhasicParams()]):
+                   phasic_params_options=[PhasicParams()],
+                   vf_loss_coeff_options=[0.5]):
     is_recurrent = get_is_recurrent(base_config)
     parameter_settings = named_product(
         learning_rate=learning_rate_options,
@@ -449,6 +454,7 @@ def sample_configs(base_config,
         intrinsic_reward_params=intrinsic_reward_params_options,
         auto_drac_params=auto_drac_params_options,
         phasic_params=phasic_params_options,
+        vf_loss_coeff=vf_loss_coeff_options,
     )
     configs = dict()
     for params in parameter_settings:
@@ -468,18 +474,53 @@ def write_experiments(base, num_iterations, env_names):
         copy.deepcopy(base),
         grad_clip_params_options=[PPOGradClipParams(1.0, "constant", 1.0, 0.1, 95, 100)],
         phasic_params_options=[
-            PhasicParams(
-                active=True,
-                aux_loss_every_k=8,
-                aux_loss_num_sgd_iter=3,
-                use_data_aug=True,
-                policy_loss_mode="drac",
-                aux_loss_start_after_num_steps=250_000,
-            ),
+            PhasicParams(active=True,
+                         aux_loss_every_k=32,
+                         aux_loss_num_sgd_iter=4,
+                         use_data_aug=True,
+                         policy_loss_mode="simple",
+                         aux_loss_start_after_num_steps=0,
+                         detach_value_head=True),
         ],
-        sampling_params_options=[PPOSamplingParams(7, 146, 16, 1022)],
+        sampling_params_options=[PPOSamplingParams(7, 141, 16, 1974)],
         num_sgd_iter_options=[1],
+        vf_loss_coeff_options=[0.5],
     )
+    configs.update(
+        sample_configs(
+            copy.deepcopy(base),
+            grad_clip_params_options=[PPOGradClipParams(1.0, "constant", 1.0, 0.1, 95, 100)],
+            phasic_params_options=[
+                PhasicParams(active=True,
+                             aux_loss_every_k=32,
+                             aux_loss_num_sgd_iter=4,
+                             use_data_aug=False,
+                             policy_loss_mode="simple",
+                             aux_loss_start_after_num_steps=0,
+                             detach_value_head=True),
+            ],
+            sampling_params_options=[PPOSamplingParams(7, 141, 16, 1974)],
+            num_sgd_iter_options=[1],
+            vf_loss_coeff_options=[0.5],
+        ))
+    configs.update(
+        sample_configs(
+            copy.deepcopy(base),
+            grad_clip_params_options=[PPOGradClipParams(1.0, "constant", 1.0, 0.1, 95, 100)],
+            phasic_params_options=[
+                PhasicParams(active=True,
+                             aux_loss_every_k=32,
+                             aux_loss_num_sgd_iter=4,
+                             use_data_aug=True,
+                             policy_loss_mode="simple",
+                             aux_loss_start_after_num_steps=0,
+                             detach_value_head=False),
+            ],
+            sampling_params_options=[PPOSamplingParams(7, 141, 16, 1974)],
+            num_sgd_iter_options=[1],
+            vf_loss_coeff_options=[0.25, 0.1],
+        ))
+
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
         for exp_name_template, config in configs.items():

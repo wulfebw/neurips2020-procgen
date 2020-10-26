@@ -212,8 +212,9 @@ def phasic_aux_loss(policy, model, dist_class, train_batch, use_data_aug):
     return aux_loss
 
 
-def phasic_policy_loss(policy, model, dist_class, train_batch, policy_loss_mode):
-    model.detach_value_head()
+def phasic_policy_loss(policy, model, dist_class, train_batch, policy_loss_mode, detach_value_head):
+    if detach_value_head:
+        model.detach_value_head()
     if policy_loss_mode == "simple":
         ret = no_data_augmenting_loss(policy, model, dist_class, train_batch)
     elif policy_loss_mode == "drac":
@@ -221,7 +222,8 @@ def phasic_policy_loss(policy, model, dist_class, train_batch, policy_loss_mode)
         ret = drac_data_augmenting_loss(policy, model, dist_class, train_batch, **drac_options)
     else:
         raise ValueError(policy_loss_mode)
-    model.attach_value_head()
+    if detach_value_head:
+        model.attach_value_head()
     return ret
 
 
@@ -234,10 +236,11 @@ def get_phase_from_train_batch(train_batch):
 
 
 def phasic_data_augmenting_loss(policy, model, dist_class, train_batch, use_data_aug,
-                                policy_loss_mode):
+                                policy_loss_mode, detach_value_head):
     phase = get_phase_from_train_batch(train_batch)
     if phase == "policy":
-        return phasic_policy_loss(policy, model, dist_class, train_batch, policy_loss_mode)
+        return phasic_policy_loss(policy, model, dist_class, train_batch, policy_loss_mode,
+                                  detach_value_head)
     elif phase == "aux":
         return phasic_aux_loss(policy, model, dist_class, train_batch, use_data_aug)
     else:
@@ -301,10 +304,17 @@ def add_phasic_stats(policy, stats):
     return stats
 
 
+def add_reward_normalization_stats(policy, train_batch, stats):
+    stats["reward_norm_value_targets"] = train_batch["value_targets"].detach().mean().cpu().numpy()
+    return stats
+
+
 def data_augmenting_stats(policy, train_batch):
     stats = kl_and_loss_stats(policy, train_batch)
     if hasattr(policy.loss_obj, "data_aug_loss"):
         stats["drac_loss_unweighted"] = policy.loss_obj.data_aug_loss
+
+    stats = add_reward_normalization_stats(policy, train_batch, stats)
     stats = add_auto_drac_stats(policy, stats)
     stats = add_phasic_stats(policy, stats)
     stats = suppress_nan_and_inf(stats)
@@ -552,6 +562,8 @@ def after_init_fn(policy, obs_space, action_space, config):
         policy.reward_norm_stats = RunningStat(max_count=1000)
     elif rew_norm_opt["mode"] == "running_return":
         policy.reward_norm_stats = ExpWeightedMovingAverageStat(alpha=rew_norm_opt["alpha"])
+    elif rew_norm_opt["mode"] == "none":
+        pass
     else:
         raise ValueError(f"Unsupported reward norm mode: {rew_norm_opt['mode']}")
 
