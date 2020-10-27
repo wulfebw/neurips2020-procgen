@@ -1,6 +1,7 @@
 run_001_drac:
     env: custom_procgen_env_wrapper  # Change this at your own risk :D
     run: custom/DataAugmentingPPOTrainer
+    disable_evaluation_worker: True
     # Can be replaced by any of the available agents as described at : 
     # https://github.com/ray-project/ray/blob/master/rllib/agents/registry.py#L103
     # 
@@ -17,12 +18,13 @@ run_001_drac:
     ################################################
     stop:
         timesteps_total: 8000000
+        time_total_s: 7200
 
     ################################################
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/ubuntu/experiments/procgen_012
+    # local_dir: /home/ubuntu/experiments/procgen_012
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -414,7 +416,7 @@ run_001_drac:
         # === Evaluation Settings ===
         ################################################
         ################################################
-        evaluation_interval: 480 # 568 # unfortunate to have to hardcode this, but not sure how better to do it.
-        evaluation_num_episodes: 2000
-        evaluation_num_workers: 0
-        evaluation_config: {"env_config": {"num_levels": 0, "env_wrapper_options": {"normalize_reward": False}}}
+        # evaluation_interval: 480 # 568 # unfortunate to have to hardcode this, but not sure how better to do it.
+        # evaluation_num_episodes: 2000
+        # evaluation_num_workers: 0
+        # evaluation_config: {"env_config": {"num_levels": 0, "env_wrapper_options": {"normalize_reward": False}}}
