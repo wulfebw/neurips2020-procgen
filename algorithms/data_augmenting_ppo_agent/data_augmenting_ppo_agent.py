@@ -305,7 +305,9 @@ def add_phasic_stats(policy, stats):
 
 
 def add_reward_normalization_stats(policy, train_batch, stats):
-    stats["reward_norm_value_targets"] = train_batch["value_targets"].detach().mean().cpu().numpy()
+    value_targets = train_batch["value_targets"].detach().cpu().numpy()
+    stats["reward_norm_mean_value_targets"] = value_targets.mean()
+    stats["reward_norm_std_value_targets"] = value_targets.std()
     return stats
 
 
@@ -453,6 +455,25 @@ def normalize_rewards_running_return(policy, rewards, eps=1e-8):
     return rewards / (policy.reward_norm_stats.std + eps)
 
 
+def normalize_rewards_full_running_return(policy, rewards, dones, episode, eps=1e-8):
+    assert hasattr(policy, "reward_norm_stats")
+    # Only update on terminal states.
+    if np.any(dones):
+        # How should this be discounted? It's pretty unclear to me.
+        # First of all, applying the discount to the reward total alone is flawed, but even ignoring that ...
+        # Suppose there's just a single reward at the end of the episode, what should it be in that case?
+        # reward * gamma ** length of episode would be the return at the start of the episode.
+        # reward * 1 would be the discounted return at the end of the episode.
+        # So is it reasonable to just average those cases?
+        # I'm not sure, but I'll just try it.
+        average_discounted_return = episode.total_reward * policy.config["gamma"]**(0.5 *
+                                                                                    episode.length)
+        policy.reward_norm_stats.add(average_discounted_return)
+
+    clip = policy.config["reward_normalization_options"]["clip"]
+    return np.clip(rewards / (policy.reward_norm_stats.std + eps), -clip, clip)
+
+
 def normalize_rewards_env_return(rewards, infos, eps=1e-8):
     return_stds = np.array([info["rew_norm_g"] for info in infos])
     return rewards / (return_stds + eps)
@@ -462,7 +483,6 @@ def reward_normalize_postprocess_sample_batch(policy,
                                               sample_batch,
                                               other_agent_batches=None,
                                               episode=None):
-
     opt = policy.config.get("reward_normalization_options", {"mode": "none"})
     if opt["mode"] == "none":
         pass
@@ -478,6 +498,10 @@ def reward_normalize_postprocess_sample_batch(policy,
     elif opt["mode"] == "running_return":
         sample_batch[SampleBatch.REWARDS] = normalize_rewards_running_return(
             policy, sample_batch[SampleBatch.REWARDS])
+    elif opt["mode"] == "full_running_return":
+        assert episode is not None
+        sample_batch[SampleBatch.REWARDS] = normalize_rewards_full_running_return(
+            policy, sample_batch[SampleBatch.REWARDS], sample_batch[SampleBatch.DONES], episode)
     elif opt["mode"] == "env_rew_norm":
         sample_batch[SampleBatch.REWARDS] = normalize_rewards_env_return(
             sample_batch[SampleBatch.REWARDS], sample_batch[SampleBatch.INFOS])
@@ -562,6 +586,8 @@ def after_init_fn(policy, obs_space, action_space, config):
         policy.reward_norm_stats = RunningStat(max_count=1000)
     elif rew_norm_opt["mode"] == "running_return":
         policy.reward_norm_stats = ExpWeightedMovingAverageStat(alpha=rew_norm_opt["alpha"])
+    elif rew_norm_opt["mode"] == "full_running_return":
+        policy.reward_norm_stats = ExpWeightedMovingAverageStat(alpha=rew_norm_opt["alpha"])
     elif rew_norm_opt["mode"] == "none":
         pass
     else:
@@ -611,6 +637,7 @@ DEFAULT_CONFIG["grad_clip_options"] = {
 DEFAULT_CONFIG["reward_normalization_options"] = {
     "mode": "none",
     "alpha": 0.01,
+    "clip": 10,
 }
 
 DEFAULT_CONFIG["auto_drac_options"] = {
