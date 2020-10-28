@@ -247,19 +247,27 @@ def phasic_data_augmenting_loss(policy, model, dist_class, train_batch, use_data
         raise ValueError(phase)
 
 
-def update_policy_entropy_coeff(policy, new_entropy_coeff):
+def update_policy_to_use_new_entropy_coeff(policy, new_entropy_coeff):
+    # Set these in case we need to reset them later.
+    policy.old_entropy_coeff = policy.entropy_coeff
+    policy.old_entropy_coeff_schedule = policy.entropy_coeff_schedule
+
     policy.entropy_coeff = new_entropy_coeff
-    if isinstance(policy.entropy_coeff_schedule,
-                  ray.rllib.utils.schedules.constant_schedule.ConstantSchedule):
-        policy.entropy_coeff_schedule._v = new_entropy_coeff
-    else:
-        raise NotImplementedError(f"{type(policy.entropy_coeff_schedule)}")
+    policy.entropy_coeff_schedule = ray.rllib.utils.schedules.constant_schedule.ConstantSchedule(
+        new_entropy_coeff, "torch")
+
+
+def update_policy_to_use_old_entropy_coeff(policy):
+    if (not hasattr(policy, "old_entropy_coeff")
+            or not hasattr(policy, "old_entropy_coeff_schedule")):
+        return
+    policy.entropy_coeff = policy.old_entropy_coeff
+    policy.entropy_coeff_schedule = policy.old_entropy_coeff_schedule
 
 
 def adapt_policy_parameters_from_batch(policy, train_batch):
     if not policy.config["adapt_policy_parameters"]:
         return {}
-
     assert_msg = "If adapting policy parameters, need to add state occupancy counter wrapper."
     assert policy.config["env_config"]["env_wrapper_options"]["count_state_occupancy"], assert_msg
 
@@ -279,11 +287,11 @@ def adapt_policy_parameters_from_batch(policy, train_batch):
     if mean_fraction_unique < policy.config["adapt_policy_parameters_options"][
             "unique_fraction_threshold"]:
         # If below the threshold unique, increase exploration.
-        update_policy_entropy_coeff(
+        update_policy_to_use_new_entropy_coeff(
             policy, policy.config["adapt_policy_parameters_options"]["alternate_entropy_coeff"])
     else:
-        # If above threshold unique, set exploration to normal level.
-        update_policy_entropy_coeff(policy, policy.config["entropy_coeff"])
+        # If above the threshold unique, use normal exploration.
+        update_policy_to_use_old_entropy_coeff(policy)
 
     return {"mean_fraction_unique_states": mean_fraction_unique}
 
@@ -354,9 +362,8 @@ def add_reward_normalization_stats(policy, train_batch, stats):
 
 
 def add_adaptation_stats(policy, stats):
-    if not hasattr(policy, "adaptation_stats") or policy.adaptation_stats is None:
-        return stats
-    stats.update(policy.adaptation_stats)
+    if hasattr(policy, "adaptation_stats") and policy.adaptation_stats is not None:
+        stats.update(policy.adaptation_stats)
     return stats
 
 
@@ -706,10 +713,10 @@ DEFAULT_CONFIG["aux_loss_every_k"] = 32
 DEFAULT_CONFIG["aux_loss_num_sgd_iter"] = 4
 DEFAULT_CONFIG["aux_loss_start_after_num_steps"] = 0
 
-DEFAULT_CONFIG["adapt_policy_parameters"] = True
+DEFAULT_CONFIG["adapt_policy_parameters"] = False
 DEFAULT_CONFIG["adapt_policy_parameters_options"] = {
     "unique_fraction_threshold": 0.9,
-    "alternate_entropy_coeff": 0.04
+    "alternate_entropy_coeff": 0.025
 }
 
 DataAugmentingTorchPolicy = build_torch_policy(name="DataAugmentingTorchPolicy",
