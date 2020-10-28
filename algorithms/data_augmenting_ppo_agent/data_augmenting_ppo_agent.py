@@ -247,6 +247,15 @@ def phasic_data_augmenting_loss(policy, model, dist_class, train_batch, use_data
         raise ValueError(phase)
 
 
+def update_policy_entropy_coeff(policy, new_entropy_coeff):
+    policy.entropy_coeff = new_entropy_coeff
+    if isinstance(policy.entropy_coeff_schedule,
+                  ray.rllib.utils.schedules.constant_schedule.ConstantSchedule):
+        policy.entropy_coeff_schedule._v = new_entropy_coeff
+    else:
+        raise NotImplementedError(f"{type(policy.entropy_coeff_schedule)}")
+
+
 def adapt_policy_parameters_from_batch(policy, train_batch):
     if not policy.config["adapt_policy_parameters"]:
         return {}
@@ -262,11 +271,19 @@ def adapt_policy_parameters_from_batch(policy, train_batch):
         return {}
 
     num_unique_states = np.array([info["num_unique_states"] for info in infos])
-    num_timesteps = train_batch["t"].detach().cpu().numpy() + 1
+    # Add 2 to account for (1) 0-based indexing and (2) not accounting for reset obs.
+    num_timesteps = train_batch["t"].detach().cpu().numpy() + 2
     fraction_unique = num_unique_states / num_timesteps
     mean_fraction_unique = fraction_unique.mean()
 
-    # TODO(wulfebw): Implement adaption code.
+    if mean_fraction_unique < policy.config["adapt_policy_parameters_options"][
+            "unique_fraction_threshold"]:
+        # If below the threshold unique, increase exploration.
+        update_policy_entropy_coeff(
+            policy, policy.config["adapt_policy_parameters_options"]["alternate_entropy_coeff"])
+    else:
+        # If above threshold unique, set exploration to normal level.
+        update_policy_entropy_coeff(policy, policy.config["entropy_coeff"])
 
     return {"mean_fraction_unique_states": mean_fraction_unique}
 
@@ -275,6 +292,7 @@ def data_augmenting_loss(policy, model, dist_class, train_batch):
     mode = model.data_augmentation_options["mode"]
     mode_options = model.data_augmentation_options["mode_options"].get(mode, {})
 
+    # Adapt policy parameters based on the content of the batch.
     policy.adaptation_stats = adapt_policy_parameters_from_batch(policy, train_batch)
 
     if mode == "none":
@@ -332,10 +350,11 @@ def add_phasic_stats(policy, stats):
 
 def add_reward_normalization_stats(policy, train_batch, stats):
     stats["reward_norm_value_targets"] = train_batch["value_targets"].detach().mean().cpu().numpy()
+    return stats
 
 
 def add_adaptation_stats(policy, stats):
-    if not hasattr(policy, "adaptation_stats"):
+    if not hasattr(policy, "adaptation_stats") or policy.adaptation_stats is None:
         return stats
     stats.update(policy.adaptation_stats)
     return stats
@@ -679,6 +698,10 @@ DEFAULT_CONFIG["aux_loss_num_sgd_iter"] = 4
 DEFAULT_CONFIG["aux_loss_start_after_num_steps"] = 0
 
 DEFAULT_CONFIG["adapt_policy_parameters"] = True
+DEFAULT_CONFIG["adapt_policy_parameters_options"] = {
+    "unique_fraction_threshold": 0.9,
+    "alternate_entropy_coeff": 0.04
+}
 
 DataAugmentingTorchPolicy = build_torch_policy(name="DataAugmentingTorchPolicy",
                                                get_default_config=lambda: DEFAULT_CONFIG,
