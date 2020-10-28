@@ -145,16 +145,19 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
         initialize_parameters(self.named_parameters(), weight_init)
 
         # Set externally during training.
+        # There's got to be a better way to do this, but I'm not sure what it is.
         self.norm_layers_active = False
+        self._detach_value_head = False
 
     @override(TorchModelV2)
     def forward(self, input_dict, state, seq_lens):
         x = input_dict["obs"].float()
+        is_training = input_dict["is_training"]
 
-        if self._in_rollout(x) or not self.norm_layers_active:
-            self.set_norm_layer_mode("eval")
-        else:
+        if is_training and self.norm_layers_active:
             self.set_norm_layer_mode("train")
+        else:
+            self.set_norm_layer_mode("eval")
 
         x = x / 255.0  # scale to 0-1
         x = x.permute(0, 3, 1, 2)  # NHWC => NCHW
@@ -181,12 +184,13 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
             x = torch.cat((x, a), axis=-1)
 
         logits = self.logits_fc(x)
-        value = self.value_fc(x)
+        if self._detach_value_head:
+            value = self.value_fc(x.detach())
+        else:
+            value = self.value_fc(x)
+
         self._value = value.squeeze(1)
         return logits, state
-
-    def _in_rollout(self, x):
-        return len(x) < 512
 
     def set_norm_layer_mode(self, mode):
         if mode == "train":
@@ -200,6 +204,12 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
     def value_function(self):
         assert self._value is not None, "must call forward() first"
         return self._value
+
+    def detach_value_head(self):
+        self._detach_value_head = True
+
+    def attach_value_head(self):
+        self._detach_value_head = False
 
 
 class RandomCrop(nn.Module):

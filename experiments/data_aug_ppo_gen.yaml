@@ -22,7 +22,7 @@ run_001_drac:
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/ubuntu/experiments/procgen_010
+    local_dir: /home/ubuntu/experiments/procgen_012
     ### END ADDED
     checkpoint_freq: 50
     checkpoint_at_end: True
@@ -36,7 +36,7 @@ run_001_drac:
         ################################################
         env_config:
             # Name of the procgen environment to train on # Note, that this parameter will be overriden during the evaluation by the AIcrowd evaluators.
-            env_name: caveflyer # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
+            env_name: coinrun # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
             # The number of unique levels that can be generated. Set to 0 to use unlimited levels
             num_levels: 200
             # The lowest seed that will be used to generated levels. 'start_level' and 'num_levels' fully specify the set of possible levels
@@ -97,21 +97,21 @@ run_001_drac:
         lr: 5.0e-4
         # Number of SGD iterations in each outer loop (i.e., number of epochs to
         # execute per train batch).
-        num_sgd_iter: 2
+        num_sgd_iter: 1 # 2
         # Total SGD batch size across all devices for SGD. This defines the
         # minibatch size within each epoch.
-        sgd_minibatch_size: 1024 # 1760 # 880 # 2048 # 8 minibatches per epoch
+        sgd_minibatch_size: 1792 # 512 # 1760 # 880 # 2048 # 8 minibatches per epoch
         # Training batch size, if applicable. Should be >= rollout_fragment_length.
         # Samples batches will be concatenated together to a batch of this size,
         # which is then passed to SGD.
-        train_batch_size: 16384 # 14080 # 16384 # 256 * 64
+        train_batch_size: 14336 # 14080 # 16384 # 256 * 64
         # Initial coefficient for KL divergence.
         kl_coeff: 0.0
         # Target value for KL divergence.
         kl_target: 0.01
         # Coefficient of the value function loss. IMPORTANT: you must tune this if
         # you set vf_share_layers: True.
-        vf_loss_coeff: 0.5
+        vf_loss_coeff: 0.25
         # Coefficient of the entropy regularizer.
         entropy_coeff: 0.01
         # PPO clip parameter.
@@ -127,8 +127,8 @@ run_001_drac:
         grad_clip: 1.0
         grad_clip_elementwise: 1.0
         grad_clip_options: {
-          "mode": "adaptive",
-          "adaptive_max": 5.0,
+          "mode": "constant",
+          "adaptive_max": 1.0,
           "adaptive_min": 0.1,
           "adaptive_percentile": 95,
           "adaptive_buffer_size": 128,
@@ -205,6 +205,11 @@ run_001_drac:
             "internal_reward_mode": "return",
           },
         }
+
+        use_phasic_optimizer: True
+        aux_loss_every_k: 32
+        aux_loss_num_sgd_iter: 4
+        aux_loss_start_after_num_steps: 0
         
         ################################################
         ################################################
@@ -272,9 +277,14 @@ run_001_drac:
               "num_filters": [32, 48, 64],
               "weight_init": "default",
               "data_augmentation_options": {
-                "mode": "drac",
+                "mode": "phasic",
                 "mode_options": {
-                  "drac": {"drac_weight": 0.2, "drac_value_weight": 1, "drac_policy_weight": 1}
+                  "drac": {"drac_weight": 0.2, "drac_value_weight": 1, "drac_policy_weight": 1},
+                  "phasic": {
+                    "use_data_aug": True,
+                    "policy_loss_mode": "simple",
+                    "detach_value_head": False,
+                  },
                 },
                 "transforms": ["random_translate"],
               },
@@ -285,7 +295,7 @@ run_001_drac:
               },
               "prev_action_mode": "concat",
               "intrinsic_reward_options": {
-                "use_noop_penalty": True,
+                "use_noop_penalty": False,
                 "noop_penalty_options": {
                   "reward": -0.1
                 },
@@ -305,12 +315,12 @@ run_001_drac:
         ################################################
         # Number of rollout worker actors to create for parallel sampling. Setting
         # this to 0 will force rollouts to be done in the trainer actor.
-        num_workers: 4 # 4 # 0 # 1 # 4 # 6
+        num_workers: 7 # 4 # 0 # 1 # 4 # 6
 
         # Number of environments to evaluate vectorwise per worker. This enables
         # model inference batching, which can improve performance for inference
         # bottlenecked workloads.
-        num_envs_per_worker: 256 # 64 # 16 # 12
+        num_envs_per_worker: 128 # 64 # 16 # 12
 
         # Divide episodes into fragments of this many steps each during rollouts.
         # Sample batches of this size are collected from rollout workers and
@@ -359,7 +369,7 @@ run_001_drac:
         # algorithms can take advantage of trainer GPUs. This can be fractional
         # (e.g., 0.3 GPUs).
         # Note : If GPUs are not available, this will be overriden by the AIcrowd evaluators to 0.
-        num_gpus: 0.96
+        num_gpus: 0.93
 
         ################################################
         ################################################
