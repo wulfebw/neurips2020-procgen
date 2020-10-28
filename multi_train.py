@@ -470,56 +470,14 @@ def sample_configs(base_config,
 def write_experiments(base, num_iterations, env_names):
     exps = dict()
     configs = dict()
-    configs.update(sample_configs(copy.deepcopy(base)))
     configs.update(
         sample_configs(
             copy.deepcopy(base),
-            phasic_params_options=[
-                PhasicParams(active=True,
-                             aux_loss_every_k=32,
-                             aux_loss_num_sgd_iter=3,
-                             use_data_aug=True,
-                             policy_loss_mode="simple",
-                             aux_loss_start_after_num_steps=0,
-                             detach_value_head=False),
-            ],
-        ))
-    configs.update(
-        sample_configs(
-            copy.deepcopy(base),
-            phasic_params_options=[
-                PhasicParams(active=True,
-                             aux_loss_every_k=32,
-                             aux_loss_num_sgd_iter=6,
-                             use_data_aug=True,
-                             policy_loss_mode="simple",
-                             aux_loss_start_after_num_steps=0,
-                             detach_value_head=False),
-            ],
-        ))
-    configs.update(
-        sample_configs(
-            copy.deepcopy(base),
-            phasic_params_options=[
-                PhasicParams(active=True,
-                             aux_loss_every_k=32,
-                             aux_loss_num_sgd_iter=6,
-                             use_data_aug=True,
-                             policy_loss_mode="simple",
-                             aux_loss_start_after_num_steps=0,
-                             detach_value_head=False),
-            ],
-            num_filters_options=[[24, 48, 48]],
-        ))
-    configs.update(
-        sample_configs(
-            copy.deepcopy(base),
-            grad_clip_params_options=[PPOGradClipParams(0.1, "constant", 1.0, 0.1, 95, 128)],
-        ))
-    configs.update(
-        sample_configs(
-            copy.deepcopy(base),
-            sampling_params_options=[PPOSamplingParams(7, 64, 32, 1792)],
+            reward_normalization_params_options=[{
+                "mode": "full_running_return",
+                "alpha": 0.01,
+                "clip": 10,
+            }],
         ))
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
