@@ -247,9 +247,61 @@ def phasic_data_augmenting_loss(policy, model, dist_class, train_batch, use_data
         raise ValueError(phase)
 
 
+def update_policy_to_use_new_entropy_coeff(policy, new_entropy_coeff):
+    # Set these in case we need to reset them later.
+    policy.old_entropy_coeff = policy.entropy_coeff
+    policy.old_entropy_coeff_schedule = policy.entropy_coeff_schedule
+
+    policy.entropy_coeff = new_entropy_coeff
+    policy.entropy_coeff_schedule = ray.rllib.utils.schedules.constant_schedule.ConstantSchedule(
+        new_entropy_coeff, "torch")
+
+
+def update_policy_to_use_old_entropy_coeff(policy):
+    if (not hasattr(policy, "old_entropy_coeff")
+            or not hasattr(policy, "old_entropy_coeff_schedule")):
+        return
+    policy.entropy_coeff = policy.old_entropy_coeff
+    policy.entropy_coeff_schedule = policy.old_entropy_coeff_schedule
+
+
+def adapt_policy_parameters_from_batch(policy, train_batch):
+    if not policy.config["adapt_policy_parameters"]:
+        return {}
+    assert_msg = "If adapting policy parameters, need to add state occupancy counter wrapper."
+    assert policy.config["env_config"]["env_wrapper_options"]["count_state_occupancy"], assert_msg
+
+    infos = train_batch.get("infos", None)
+    if infos is None or len(infos) == 0:
+        return {}
+
+    if "num_unique_states" not in infos[0]:
+        return {}
+
+    num_unique_states = np.array([info["num_unique_states"] for info in infos])
+    # Add 2 to account for (1) 0-based indexing and (2) not accounting for reset obs.
+    num_timesteps = train_batch["t"].detach().cpu().numpy() + 2
+    fraction_unique = num_unique_states / num_timesteps
+    mean_fraction_unique = fraction_unique.mean()
+
+    if mean_fraction_unique < policy.config["adapt_policy_parameters_options"][
+            "unique_fraction_threshold"]:
+        # If below the threshold unique, increase exploration.
+        update_policy_to_use_new_entropy_coeff(
+            policy, policy.config["adapt_policy_parameters_options"]["alternate_entropy_coeff"])
+    else:
+        # If above the threshold unique, use normal exploration.
+        update_policy_to_use_old_entropy_coeff(policy)
+
+    return {"mean_fraction_unique_states": mean_fraction_unique}
+
+
 def data_augmenting_loss(policy, model, dist_class, train_batch):
     mode = model.data_augmentation_options["mode"]
     mode_options = model.data_augmentation_options["mode_options"].get(mode, {})
+
+    # Adapt policy parameters based on the content of the batch.
+    policy.adaptation_stats = adapt_policy_parameters_from_batch(policy, train_batch)
 
     if mode == "none":
         return no_data_augmenting_loss(policy, model, dist_class, train_batch, **mode_options)
@@ -309,6 +361,12 @@ def add_reward_normalization_stats(policy, train_batch, stats):
     return stats
 
 
+def add_adaptation_stats(policy, stats):
+    if hasattr(policy, "adaptation_stats") and policy.adaptation_stats is not None:
+        stats.update(policy.adaptation_stats)
+    return stats
+
+
 def data_augmenting_stats(policy, train_batch):
     stats = kl_and_loss_stats(policy, train_batch)
     if hasattr(policy.loss_obj, "data_aug_loss"):
@@ -317,6 +375,7 @@ def data_augmenting_stats(policy, train_batch):
     stats = add_reward_normalization_stats(policy, train_batch, stats)
     stats = add_auto_drac_stats(policy, stats)
     stats = add_phasic_stats(policy, stats)
+    stats = add_adaptation_stats(policy, stats)
     stats = suppress_nan_and_inf(stats)
     return stats
 
@@ -328,20 +387,29 @@ def apply_noop_penalty(sample_batch, options):
     observations, and if they exist then it applies a penalty.
     """
     assert "reward" in options
-    reward_value = options["reward"]
-    cur_obs = sample_batch[SampleBatch.CUR_OBS]
-    next_obs = sample_batch[SampleBatch.NEXT_OBS]
-    dones = sample_batch[SampleBatch.DONES]
+    assert_msg = "If applying a noop penalty, need to add state occupancy counter wrapper."
+    assert "matches_previous_obs" in sample_batch["infos"][0], assert_msg
 
-    diffs = (cur_obs[..., -3:] - next_obs[..., -3:]).sum(axis=(1, 2, 3))
-    noop_timesteps = diffs == 0
+    reward_value = options["reward"]
+    noop_timesteps = np.array(
+        [info["matches_previous_obs"] for info in sample_batch[SampleBatch.INFOS]])
     reward = noop_timesteps * reward_value
     # Don't apply the reward on a terminal timestep.
-    reward = reward * (1 - dones)
+    reward = reward * (1 - sample_batch[SampleBatch.DONES])
     sample_batch[SampleBatch.REWARDS] += reward
 
     debugging = False
     if debugging:
+
+        cur_obs = sample_batch[SampleBatch.CUR_OBS]
+        next_obs = sample_batch[SampleBatch.NEXT_OBS]
+        dones = sample_batch[SampleBatch.DONES]
+        diffs = (cur_obs[..., -3:] - next_obs[..., -3:]).sum(axis=(1, 2, 3))
+        noop_timesteps = diffs == 0
+        reward = noop_timesteps * reward_value
+        # Don't apply the reward on a terminal timestep.
+        reward = reward * (1 - dones)
+
         print(reward)
         print("len obs ", len(cur_obs))
         actions = sample_batch[SampleBatch.ACTIONS]
@@ -644,6 +712,12 @@ DEFAULT_CONFIG["use_phasic_optimizer"] = True
 DEFAULT_CONFIG["aux_loss_every_k"] = 32
 DEFAULT_CONFIG["aux_loss_num_sgd_iter"] = 4
 DEFAULT_CONFIG["aux_loss_start_after_num_steps"] = 0
+
+DEFAULT_CONFIG["adapt_policy_parameters"] = False
+DEFAULT_CONFIG["adapt_policy_parameters_options"] = {
+    "unique_fraction_threshold": 0.9,
+    "alternate_entropy_coeff": 0.025
+}
 
 DataAugmentingTorchPolicy = build_torch_policy(name="DataAugmentingTorchPolicy",
                                                get_default_config=lambda: DEFAULT_CONFIG,

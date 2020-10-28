@@ -76,7 +76,7 @@ run_001_drac:
               "normalize_reward_options": {
                 "discount": 0.999
               },
-              "count_state_occupancy": False,
+              "count_state_occupancy": True,
             }
 
 

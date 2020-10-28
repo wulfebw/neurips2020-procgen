@@ -243,6 +243,25 @@ class PhasicParams:
         return rep
 
 
+class AdaptiveEntropyParams:
+    def __init__(self, active=False, unique_fraction_threshold=0.9, alternate_entropy_coeff=0.025):
+        self.active = active
+        self.unique_fraction_threshold = unique_fraction_threshold
+        self.alternate_entropy_coeff = alternate_entropy_coeff
+
+    def options(self):
+        return dict(
+            unique_fraction_threshold=self.unique_fraction_threshold,
+            alternate_entropy_coeff=self.alternate_entropy_coeff,
+        )
+
+    def __repr__(self):
+        if not self.active:
+            return ""
+        else:
+            return f"adapt_ent_{self.unique_fraction_threshold}_{self.alternate_entropy_coeff}"
+
+
 def get_is_recurrent(config):
     if "rnn" in config["config"]["model"]["custom_model"]:
         return True
@@ -254,6 +273,12 @@ def set_env_params(config, params, is_recurrent):
     use_frame_stack = True
     if is_recurrent or params.frame_stack_k == 1:
         use_frame_stack = False
+
+    count_state_occupancy = False
+    if (params.intrinsic_reward_params.use_state_revisitation_penalty
+            or params.intrinsic_reward_params.use_noop_penalty
+            or params.adaptive_entropy_params.active):
+        count_state_occupancy = True
 
     env_wrapper_options = {
         "frame_stack": use_frame_stack,
@@ -271,7 +296,7 @@ def set_env_params(config, params, is_recurrent):
             "num_prev_frames": 1
         },
         "frame_stack_phase_correlation": False,
-        "count_state_occupancy": params.intrinsic_reward_params.use_state_revisitation_penalty,
+        "count_state_occupancy": count_state_occupancy,
     }
     config["config"]["env_config"]["env_wrapper_options"] = env_wrapper_options
     return config
@@ -299,6 +324,8 @@ def set_ppo_algorithm_params(config, params):
     config["config"]["aux_loss_num_sgd_iter"] = params.phasic_params.aux_loss_num_sgd_iter
     config["config"][
         "aux_loss_start_after_num_steps"] = params.phasic_params.aux_loss_start_after_num_steps
+    config["config"]["adapt_policy_parameters"] = params.adaptive_entropy_params.active
+    config["config"]["adapt_policy_parameters_options"] = params.adaptive_entropy_params.options()
 
     # All that matters is these gpu resource parameters add to 1.
     config["config"]["num_gpus_per_worker"] = params.sampling_params.num_gpus_per_worker
@@ -382,7 +409,7 @@ def get_ppo_exp_name(params, is_recurrent):
         # f"fc_size_{params.fc_size}",
         f"{params.sampling_params}",
         "_".join([get_transform_abbreviation(t) for t in params.transforms]),
-        f"ent_sch_{'_'.join(str(v) for y in params.entropy_coeff_schedule for v in y)}",
+        # f"ent_sch_{'_'.join(str(v) for y in params.entropy_coeff_schedule for v in y)}",
         # f"dropout_{params.dropout_prob}",
         f"vf_loss_coeff_{params.vf_loss_coeff}",
         # f"drac_{params.drac_weight}",
@@ -391,8 +418,9 @@ def get_ppo_exp_name(params, is_recurrent):
         # f"weight_init_{params.weight_init}",
         f"rew_norm_alpha_{params.reward_normalization_params['alpha']}",
         f"{params.intrinsic_reward_params}",
-        f"auto_drac_{params.auto_drac_params}",
+        # f"auto_drac_{params.auto_drac_params}",
         f"{params.phasic_params}",
+        f"{params.adaptive_entropy_params}"
     ])
 
     # Add the params that only apply in the recurrent or non-recurrent cases.
@@ -431,7 +459,8 @@ def sample_configs(base_config,
                    intrinsic_reward_params_options=[IntrinsicRewardParams()],
                    auto_drac_params_options=[AutoDracParams()],
                    phasic_params_options=[PhasicParams()],
-                   vf_loss_coeff_options=[0.25]):
+                   vf_loss_coeff_options=[0.25],
+                   adaptive_entropy_params_options=[AdaptiveEntropyParams()]):
     is_recurrent = get_is_recurrent(base_config)
     parameter_settings = named_product(
         learning_rate=learning_rate_options,
@@ -455,6 +484,7 @@ def sample_configs(base_config,
         auto_drac_params=auto_drac_params_options,
         phasic_params=phasic_params_options,
         vf_loss_coeff=vf_loss_coeff_options,
+        adaptive_entropy_params=adaptive_entropy_params_options,
     )
     configs = dict()
     for params in parameter_settings:
@@ -468,9 +498,7 @@ def sample_configs(base_config,
 
 
 def write_experiments(base, num_iterations, env_names):
-    exps = dict()
     configs = dict()
-    configs.update(sample_configs(copy.deepcopy(base)))
     configs.update(
         sample_configs(
             copy.deepcopy(base),
@@ -483,44 +511,11 @@ def write_experiments(base, num_iterations, env_names):
                              aux_loss_start_after_num_steps=0,
                              detach_value_head=False),
             ],
+            adaptive_entropy_params_options=[AdaptiveEntropyParams(active=True)],
+            intrinsic_reward_params_options=[IntrinsicRewardParams(use_noop_penalty=True)],
         ))
-    configs.update(
-        sample_configs(
-            copy.deepcopy(base),
-            phasic_params_options=[
-                PhasicParams(active=True,
-                             aux_loss_every_k=32,
-                             aux_loss_num_sgd_iter=6,
-                             use_data_aug=True,
-                             policy_loss_mode="simple",
-                             aux_loss_start_after_num_steps=0,
-                             detach_value_head=False),
-            ],
-        ))
-    configs.update(
-        sample_configs(
-            copy.deepcopy(base),
-            phasic_params_options=[
-                PhasicParams(active=True,
-                             aux_loss_every_k=32,
-                             aux_loss_num_sgd_iter=6,
-                             use_data_aug=True,
-                             policy_loss_mode="simple",
-                             aux_loss_start_after_num_steps=0,
-                             detach_value_head=False),
-            ],
-            num_filters_options=[[24, 48, 48]],
-        ))
-    configs.update(
-        sample_configs(
-            copy.deepcopy(base),
-            grad_clip_params_options=[PPOGradClipParams(0.1, "constant", 1.0, 0.1, 95, 128)],
-        ))
-    configs.update(
-        sample_configs(
-            copy.deepcopy(base),
-            sampling_params_options=[PPOSamplingParams(7, 64, 32, 1792)],
-        ))
+
+    exps = dict()
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
         for exp_name_template, config in configs.items():
