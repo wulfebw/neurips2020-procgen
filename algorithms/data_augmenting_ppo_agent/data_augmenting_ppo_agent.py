@@ -380,20 +380,29 @@ def apply_noop_penalty(sample_batch, options):
     observations, and if they exist then it applies a penalty.
     """
     assert "reward" in options
-    reward_value = options["reward"]
-    cur_obs = sample_batch[SampleBatch.CUR_OBS]
-    next_obs = sample_batch[SampleBatch.NEXT_OBS]
-    dones = sample_batch[SampleBatch.DONES]
+    assert_msg = "If applying a noop penalty, need to add state occupancy counter wrapper."
+    assert "matches_previous_obs" in sample_batch["infos"][0], assert_msg
 
-    diffs = (cur_obs[..., -3:] - next_obs[..., -3:]).sum(axis=(1, 2, 3))
-    noop_timesteps = diffs == 0
+    reward_value = options["reward"]
+    noop_timesteps = np.array(
+        [info["matches_previous_obs"] for info in sample_batch[SampleBatch.INFOS]])
     reward = noop_timesteps * reward_value
     # Don't apply the reward on a terminal timestep.
-    reward = reward * (1 - dones)
+    reward = reward * (1 - sample_batch[SampleBatch.DONES])
     sample_batch[SampleBatch.REWARDS] += reward
 
     debugging = False
     if debugging:
+
+        cur_obs = sample_batch[SampleBatch.CUR_OBS]
+        next_obs = sample_batch[SampleBatch.NEXT_OBS]
+        dones = sample_batch[SampleBatch.DONES]
+        diffs = (cur_obs[..., -3:] - next_obs[..., -3:]).sum(axis=(1, 2, 3))
+        noop_timesteps = diffs == 0
+        reward = noop_timesteps * reward_value
+        # Don't apply the reward on a terminal timestep.
+        reward = reward * (1 - dones)
+
         print(reward)
         print("len obs ", len(cur_obs))
         actions = sample_batch[SampleBatch.ACTIONS]

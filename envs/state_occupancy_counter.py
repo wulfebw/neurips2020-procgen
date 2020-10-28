@@ -12,22 +12,30 @@ class StateOccupancyCounter(gym.Wrapper):
     def reset(self):
         self.state_occupancy_counts = collections.Counter()
         obs = self.env.reset()
+        self.prev_obs_hash = None
         self.update_state_occupancy_count(obs)
         return obs
 
     def step(self, action):
         obs, rew, done, info = self.env.step(action)
-        info["occupancy_count"] = self.update_state_occupancy_count(obs)
-        info["num_unique_states"] = len(self.state_occupancy_counts)
+        occupancy_info = self.update_state_occupancy_count(obs)
+        info.update(occupancy_info)
         return obs, rew, done, info
 
     def compute_obs_hash(self, obs):
         return hash(obs.tostring())
 
     def update_state_occupancy_count(self, obs):
+        """Updates the occupancy count and returns a dict of info."""
         obs_hash = self.compute_obs_hash(obs)
+        matches_previous_obs = self.prev_obs_hash is not None and obs_hash == self.prev_obs_hash
         self.state_occupancy_counts[obs_hash] += 1
-        return self.state_occupancy_counts[obs_hash]
+        self.prev_obs_hash = obs_hash
+        return {
+            "occupancy_count": self.state_occupancy_counts[obs_hash],
+            "num_unique_states": len(self.state_occupancy_counts),
+            "matches_previous_obs": matches_previous_obs
+        }
 
 
 if __name__ == "__main__":
