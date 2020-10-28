@@ -382,7 +382,7 @@ def get_ppo_exp_name(params, is_recurrent):
         # f"fc_size_{params.fc_size}",
         f"{params.sampling_params}",
         "_".join([get_transform_abbreviation(t) for t in params.transforms]),
-        f"ent_sch_{'_'.join(str(v) for y in params.entropy_coeff_schedule for v in y)}",
+        # f"ent_sch_{'_'.join(str(v) for y in params.entropy_coeff_schedule for v in y)}",
         # f"dropout_{params.dropout_prob}",
         f"vf_loss_coeff_{params.vf_loss_coeff}",
         # f"drac_{params.drac_weight}",
@@ -390,7 +390,7 @@ def get_ppo_exp_name(params, is_recurrent):
         # f"act_fn_{params.fc_activation}",
         # f"weight_init_{params.weight_init}",
         f"rew_norm_alpha_{params.reward_normalization_params['alpha']}",
-        f"{params.intrinsic_reward_params}",
+        # f"{params.intrinsic_reward_params}",
         f"auto_drac_{params.auto_drac_params}",
         f"{params.phasic_params}",
     ])
@@ -470,7 +470,6 @@ def sample_configs(base_config,
 def write_experiments(base, num_iterations, env_names):
     exps = dict()
     configs = dict()
-    configs.update(sample_configs(copy.deepcopy(base)))
     configs.update(
         sample_configs(
             copy.deepcopy(base),
@@ -490,36 +489,26 @@ def write_experiments(base, num_iterations, env_names):
             phasic_params_options=[
                 PhasicParams(active=True,
                              aux_loss_every_k=32,
-                             aux_loss_num_sgd_iter=6,
+                             aux_loss_num_sgd_iter=3,
                              use_data_aug=True,
                              policy_loss_mode="simple",
                              aux_loss_start_after_num_steps=0,
-                             detach_value_head=False),
+                             detach_value_head=True),
             ],
-        ))
-    configs.update(
-        sample_configs(
-            copy.deepcopy(base),
-            phasic_params_options=[
-                PhasicParams(active=True,
-                             aux_loss_every_k=32,
-                             aux_loss_num_sgd_iter=6,
-                             use_data_aug=True,
-                             policy_loss_mode="simple",
-                             aux_loss_start_after_num_steps=0,
-                             detach_value_head=False),
-            ],
-            num_filters_options=[[24, 48, 48]],
-        ))
-    configs.update(
-        sample_configs(
-            copy.deepcopy(base),
-            grad_clip_params_options=[PPOGradClipParams(0.1, "constant", 1.0, 0.1, 95, 128)],
         ))
     configs.update(
         sample_configs(
             copy.deepcopy(base),
             sampling_params_options=[PPOSamplingParams(7, 64, 32, 1792)],
+            phasic_params_options=[
+                PhasicParams(active=True,
+                             aux_loss_every_k=16,
+                             aux_loss_num_sgd_iter=3,
+                             use_data_aug=True,
+                             policy_loss_mode="simple",
+                             aux_loss_start_after_num_steps=0,
+                             detach_value_head=False),
+            ],
         ))
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
