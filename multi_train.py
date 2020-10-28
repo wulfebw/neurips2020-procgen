@@ -498,9 +498,7 @@ def sample_configs(base_config,
 
 
 def write_experiments(base, num_iterations, env_names):
-    exps = dict()
     configs = dict()
-    configs.update(sample_configs(copy.deepcopy(base)))
     configs.update(
         sample_configs(
             copy.deepcopy(base),
@@ -513,7 +511,11 @@ def write_experiments(base, num_iterations, env_names):
                              aux_loss_start_after_num_steps=0,
                              detach_value_head=False),
             ],
+            adaptive_entropy_params_options=[AdaptiveEntropyParams(active=True)],
+            intrinsic_reward_params_options=[IntrinsicRewardParams(use_noop_penalty=True)],
         ))
+
+    exps = dict()
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
         for exp_name_template, config in configs.items():
