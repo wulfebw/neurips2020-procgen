@@ -40,7 +40,7 @@ run_001_drac:
             # Name of the procgen environment to train on # Note, that this parameter will be overriden during the evaluation by the AIcrowd evaluators.
             env_name: coinrun # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
             # The number of unique levels that can be generated. Set to 0 to use unlimited levels
-            num_levels: 200
+            num_levels: 0
             # The lowest seed that will be used to generated levels. 'start_level' and 'num_levels' fully specify the set of possible levels
             start_level: 0
             # Paint player velocity info in the top left corner. Only supported by certain games.
@@ -210,7 +210,7 @@ run_001_drac:
 
         use_phasic_optimizer: True
         aux_loss_every_k: 32
-        aux_loss_num_sgd_iter: 4
+        aux_loss_num_sgd_iter: 3
         aux_loss_start_after_num_steps: 0
         
         ################################################
@@ -285,7 +285,7 @@ run_001_drac:
                   "phasic": {
                     "use_data_aug": True,
                     "policy_loss_mode": "simple",
-                    "detach_value_head": False,
+                    "detach_value_head": True,
                   },
                 },
                 "transforms": ["random_translate"],
