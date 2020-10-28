@@ -475,7 +475,7 @@ def write_experiments(base, num_iterations, env_names):
             copy.deepcopy(base),
             reward_normalization_params_options=[{
                 "mode": "full_running_return",
-                "alpha": 0.01,
+                "alpha": 0.005,
                 "clip": 10,
             }],
         ))

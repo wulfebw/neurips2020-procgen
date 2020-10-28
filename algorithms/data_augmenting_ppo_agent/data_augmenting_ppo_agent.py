@@ -466,8 +466,7 @@ def normalize_rewards_full_running_return(policy, rewards, dones, episode, eps=1
         # reward * 1 would be the discounted return at the end of the episode.
         # So is it reasonable to just average those cases?
         # I'm not sure, but I'll just try it.
-        average_discounted_return = episode.total_reward * policy.config["gamma"]**(0.5 *
-                                                                                    episode.length)
+        average_discounted_return = episode.total_reward * policy.config["gamma"]**episode.length
         policy.reward_norm_stats.add(average_discounted_return)
 
     clip = policy.config["reward_normalization_options"]["clip"]
