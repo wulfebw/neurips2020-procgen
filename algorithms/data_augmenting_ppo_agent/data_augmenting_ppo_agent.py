@@ -248,6 +248,9 @@ def phasic_data_augmenting_loss(policy, model, dist_class, train_batch, use_data
 
 
 def update_policy_to_use_new_entropy_coeff(policy, new_entropy_coeff):
+    if hasattr(policy, "entropy_coeff_state") and policy.entropy_coeff_state == "new":
+        return
+
     # Set these in case we need to reset them later.
     policy.old_entropy_coeff = policy.entropy_coeff
     policy.old_entropy_coeff_schedule = policy.entropy_coeff_schedule
@@ -256,6 +259,8 @@ def update_policy_to_use_new_entropy_coeff(policy, new_entropy_coeff):
     policy.entropy_coeff_schedule = ray.rllib.utils.schedules.constant_schedule.ConstantSchedule(
         new_entropy_coeff, "torch")
 
+    policy.entropy_coeff_state = "new"
+
 
 def update_policy_to_use_old_entropy_coeff(policy):
     if (not hasattr(policy, "old_entropy_coeff")
@@ -263,6 +268,7 @@ def update_policy_to_use_old_entropy_coeff(policy):
         return
     policy.entropy_coeff = policy.old_entropy_coeff
     policy.entropy_coeff_schedule = policy.old_entropy_coeff_schedule
+    policy.entropy_coeff_state = "old"
 
 
 def adapt_policy_parameters_from_batch(policy, train_batch):
