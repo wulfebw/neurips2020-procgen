@@ -36,7 +36,7 @@ run_001_drac:
         ################################################
         env_config:
             # Name of the procgen environment to train on # Note, that this parameter will be overriden during the evaluation by the AIcrowd evaluators.
-            env_name: coinrun # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
+            env_name: bossfight # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
             # The number of unique levels that can be generated. Set to 0 to use unlimited levels
             num_levels: 200
             # The lowest seed that will be used to generated levels. 'start_level' and 'num_levels' fully specify the set of possible levels
@@ -208,8 +208,15 @@ run_001_drac:
 
         use_phasic_optimizer: True
         aux_loss_every_k: 32
-        aux_loss_num_sgd_iter: 4
+        aux_loss_num_sgd_iter: 3
         aux_loss_start_after_num_steps: 0
+
+        adapt_policy_parameters: True
+        adapt_policy_parameters_options: {
+          "unique_fraction_threshold": 0.9,
+          "alternate_entropy_coeff": 0.02,
+        }
+
         
         ################################################
         ################################################
@@ -295,9 +302,10 @@ run_001_drac:
               },
               "prev_action_mode": "concat",
               "intrinsic_reward_options": {
-                "use_noop_penalty": False,
+                "use_noop_penalty": True,
                 "noop_penalty_options": {
-                  "reward": -0.1
+                  "reward": -0.1,
+                  "min_timestep": 10,
                 },
                 "use_state_revisitation_penalty": False,
                 "state_revisitation_penalty_options": {

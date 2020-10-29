@@ -402,6 +402,8 @@ def apply_noop_penalty(sample_batch, options):
     reward = noop_timesteps * reward_value
     # Don't apply the reward on a terminal timestep.
     reward = reward * (1 - sample_batch[SampleBatch.DONES])
+    # Don't apply the reward early in the episode.
+    reward = reward * (sample_batch["t"] > options["min_timestep"])
     sample_batch[SampleBatch.REWARDS] += reward
 
     debugging = False

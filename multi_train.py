@@ -128,7 +128,10 @@ class IntrinsicRewardParams:
     def __init__(
         self,
         use_noop_penalty=False,
-        noop_penalty_options={"reward": -0.1},
+        noop_penalty_options={
+            "reward": -0.1,
+            "min_timestep": 10
+        },
         use_state_revisitation_penalty=False,
         state_revisitation_penalty_options={"reward": -0.01},
     ):
@@ -149,6 +152,7 @@ class IntrinsicRewardParams:
         rep = "intrins_reward"
         if self.use_noop_penalty:
             rep += "_noop"
+            rep += f"_{self.noop_penalty_options['min_timestep']}"
         if self.use_state_revisitation_penalty:
             rep += "_revisit"
         return rep
@@ -416,7 +420,7 @@ def get_ppo_exp_name(params, is_recurrent):
         f"grad_clip_{str(params.grad_clip_params)}",
         # f"act_fn_{params.fc_activation}",
         # f"weight_init_{params.weight_init}",
-        f"rew_norm_alpha_{params.reward_normalization_params['alpha']}",
+        # f"rew_norm_alpha_{params.reward_normalization_params['alpha']}",
         f"{params.intrinsic_reward_params}",
         # f"auto_drac_{params.auto_drac_params}",
         f"{params.phasic_params}",
@@ -441,7 +445,7 @@ def sample_configs(base_config,
                    fc_size_options=[256],
                    lstm_cell_size_options=[256],
                    weight_init_options=["default"],
-                   sampling_params_options=[PPOSamplingParams(7, 128, 16, 1792)],
+                   sampling_params_options=[PPOSamplingParams(7, 125, 16, 1750)],
                    max_seq_len_options=[16],
                    reward_normalization_params_options=[{
                        "mode": "running_return",
