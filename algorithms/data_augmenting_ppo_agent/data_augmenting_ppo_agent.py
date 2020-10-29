@@ -22,6 +22,7 @@ from ray.rllib.utils import try_import_torch
 from ray.rllib.utils.torch_ops import sequence_mask
 
 from algorithms.data_augmentation.data_augmentation import apply_data_augmentation
+from algorithms.data_augmentation.mixreg import apply_mixreg
 from algorithms.data_augmenting_ppo_agent.ppo_utils import (compute_running_mean_and_variance,
                                                             RunningStat,
                                                             ExpWeightedMovingAverageStat)
@@ -178,13 +179,18 @@ def no_data_augmenting_loss(policy, model, dist_class, train_batch):
     return compute_ppo_loss(policy, dist_class, model, train_batch, action_dist, state)
 
 
-def phasic_aux_loss(policy, model, dist_class, train_batch, use_data_aug):
+def phasic_aux_loss(policy, model, dist_class, train_batch, use_data_aug, use_mixreg):
     assert "pre_aux_logits" in train_batch
 
     if use_data_aug:
         assert len(model.data_augmentation_options["transforms"]) > 0
         train_batch["obs"], _ = apply_data_augmentation(train_batch["obs"],
                                                         model.data_augmentation_options)
+
+    if use_mixreg:
+        tensors, _, _ = apply_mixreg(train_batch["obs"], train_batch["pre_aux_logits"],
+                                     train_batch["value_targets"])
+        train_batch["obs"], train_batch["pre_aux_logits"], train_batch["value_targets"] = tensors
 
     # Forward through model.
     model.norm_layers_active = True
@@ -236,13 +242,13 @@ def get_phase_from_train_batch(train_batch):
 
 
 def phasic_data_augmenting_loss(policy, model, dist_class, train_batch, use_data_aug,
-                                policy_loss_mode, detach_value_head):
+                                policy_loss_mode, detach_value_head, use_mixreg):
     phase = get_phase_from_train_batch(train_batch)
     if phase == "policy":
         return phasic_policy_loss(policy, model, dist_class, train_batch, policy_loss_mode,
                                   detach_value_head)
     elif phase == "aux":
-        return phasic_aux_loss(policy, model, dist_class, train_batch, use_data_aug)
+        return phasic_aux_loss(policy, model, dist_class, train_batch, use_data_aug, use_mixreg)
     else:
         raise ValueError(phase)
 

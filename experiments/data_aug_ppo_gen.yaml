@@ -208,7 +208,7 @@ run_001_drac:
 
         use_phasic_optimizer: True
         aux_loss_every_k: 32
-        aux_loss_num_sgd_iter: 4
+        aux_loss_num_sgd_iter: 3
         aux_loss_start_after_num_steps: 0
         
         ################################################
@@ -281,7 +281,8 @@ run_001_drac:
                 "mode_options": {
                   "drac": {"drac_weight": 0.2, "drac_value_weight": 1, "drac_policy_weight": 1},
                   "phasic": {
-                    "use_data_aug": True,
+                    "use_data_aug": False,
+                    "use_mixreg": True,
                     "policy_loss_mode": "simple",
                     "detach_value_head": False,
                   },

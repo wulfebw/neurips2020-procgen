@@ -35,15 +35,15 @@ def apply_mixreg(*tensors, concentration=0.2):
     return mixed_tensors, lmbda, permutation
 
 
-def generate_batch():
+def generate_batch(num_imgs=512,
+                   height=64,
+                   width=64,
+                   env_id="procgen:procgen-caveflyer-v0",
+                   action_dim=5):
     import copy
 
-    num_imgs = 512
-    height = 64
-    width = 64
-
     import gym
-    env = gym.make("procgen:procgen-caveflyer-v0")
+    env = gym.make(env_id)
     obs = []
     x = env.reset()
     obs.append(x)
@@ -53,7 +53,6 @@ def generate_batch():
     obs = torch.tensor(obs).to("cuda")
 
     value_targets = torch.randn(num_imgs, 1)
-    action_dim = 5
     logits = torch.randn(num_imgs, action_dim)
 
     return dict(obs=obs, value_targets=value_targets, logits=logits)
@@ -82,7 +81,7 @@ def plot_mixreg_results(orig_obs, orig_values, orig_logits, obs, values, logits,
         plt.close()
 
 
-def main():
+def main1():
     batch = generate_batch()
     mixed_batch, lmbda, permutation = apply_mixreg(batch["obs"], batch["value_targets"],
                                                    batch["logits"])
@@ -90,5 +89,23 @@ def main():
                         permutation)
 
 
+def time_function(f, num_iters, *args):
+    import sys
+    import time
+
+    start = time.time()
+    for itr in range(num_iters):
+        sys.stdout.write(f"\r{itr + 1} / {num_iters}")
+        f(*args)
+    end = time.time()
+    print(f"\nTook {end - start:0.4f} seconds")
+
+
+def main2():
+    batch = generate_batch(num_imgs=2000)
+    args = batch["obs"], batch["value_targets"], batch["logits"]
+    time_function(apply_mixreg, 10000, *args)
+
+
 if __name__ == "__main__":
-    main()
+    main2()

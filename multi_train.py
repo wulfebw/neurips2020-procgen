@@ -211,7 +211,8 @@ class PhasicParams:
                  use_data_aug=True,
                  policy_loss_mode="simple",
                  aux_loss_start_after_num_steps=0,
-                 detach_value_head=False):
+                 detach_value_head=False,
+                 use_mixreg=False):
         self.active = active
         self.aux_loss_every_k = aux_loss_every_k
         self.aux_loss_num_sgd_iter = aux_loss_num_sgd_iter
@@ -219,12 +220,14 @@ class PhasicParams:
         self.policy_loss_mode = policy_loss_mode
         self.aux_loss_start_after_num_steps = aux_loss_start_after_num_steps
         self.detach_value_head = detach_value_head
+        self.use_mixreg = use_mixreg
 
     def options(self):
         return dict(
             use_data_aug=self.use_data_aug,
             policy_loss_mode=self.policy_loss_mode,
             detach_value_head=self.detach_value_head,
+            use_mixreg=self.use_mixreg,
         )
 
     def __repr__(self):
@@ -240,6 +243,8 @@ class PhasicParams:
         ])
         if self.use_data_aug:
             rep += "_w_data_aug"
+        if self.use_mixreg:
+            rep += "_w_mixreg"
         return rep
 
 
@@ -503,13 +508,16 @@ def write_experiments(base, num_iterations, env_names):
         sample_configs(
             copy.deepcopy(base),
             phasic_params_options=[
-                PhasicParams(active=True,
-                             aux_loss_every_k=32,
-                             aux_loss_num_sgd_iter=3,
-                             use_data_aug=True,
-                             policy_loss_mode="simple",
-                             aux_loss_start_after_num_steps=0,
-                             detach_value_head=False),
+                PhasicParams(
+                    active=True,
+                    aux_loss_every_k=32,
+                    aux_loss_num_sgd_iter=3,
+                    use_data_aug=False,
+                    policy_loss_mode="simple",
+                    aux_loss_start_after_num_steps=0,
+                    detach_value_head=False,
+                    use_mixreg=True,
+                ),
             ],
             adaptive_entropy_params_options=[AdaptiveEntropyParams(active=True)],
             intrinsic_reward_params_options=[IntrinsicRewardParams(use_noop_penalty=True)],
