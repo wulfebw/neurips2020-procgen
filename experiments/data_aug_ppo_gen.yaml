@@ -16,7 +16,7 @@ run_001_drac:
     # === Stop Conditions ===
     ################################################
     stop:
-        timesteps_total: 8000000
+        timesteps_total: 7000000
 
     ################################################
     # === Settings for Checkpoints ===

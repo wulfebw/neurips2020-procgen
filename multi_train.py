@@ -207,7 +207,7 @@ class PhasicParams:
     def __init__(self,
                  active=True,
                  aux_loss_every_k=32,
-                 aux_loss_num_sgd_iter=4,
+                 aux_loss_num_sgd_iter=3,
                  use_data_aug=True,
                  policy_loss_mode="simple",
                  aux_loss_start_after_num_steps=0,
@@ -244,7 +244,7 @@ class PhasicParams:
 
 
 class AdaptiveEntropyParams:
-    def __init__(self, active=False, unique_fraction_threshold=0.9, alternate_entropy_coeff=0.025):
+    def __init__(self, active=False, unique_fraction_threshold=0.9, alternate_entropy_coeff=0.02):
         self.active = active
         self.unique_fraction_threshold = unique_fraction_threshold
         self.alternate_entropy_coeff = alternate_entropy_coeff
@@ -499,21 +499,27 @@ def sample_configs(base_config,
 
 def write_experiments(base, num_iterations, env_names):
     configs = dict()
+    configs.update(sample_configs(copy.deepcopy(base)))
     configs.update(
         sample_configs(
             copy.deepcopy(base),
-            phasic_params_options=[
-                PhasicParams(active=True,
-                             aux_loss_every_k=32,
-                             aux_loss_num_sgd_iter=3,
-                             use_data_aug=True,
-                             policy_loss_mode="simple",
-                             aux_loss_start_after_num_steps=0,
-                             detach_value_head=False),
-            ],
             adaptive_entropy_params_options=[AdaptiveEntropyParams(active=True)],
             intrinsic_reward_params_options=[IntrinsicRewardParams(use_noop_penalty=True)],
         ))
+    configs.update(
+        sample_configs(
+            copy.deepcopy(base),
+            grad_clip_params_options=[PPOGradClipParams(1.0, "constant", 10.0, 0.1, 95, 128)],
+        ))
+    configs.update(
+        sample_configs(
+            copy.deepcopy(base),
+            phasic_params_options=[PhasicParams(aux_loss_every_k=16)],
+        ))
+    configs.update(sample_configs(
+        copy.deepcopy(base),
+        num_filters_options=[[32, 48, 48]],
+    ))
 
     exps = dict()
     for env_name in env_names:
