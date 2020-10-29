@@ -26,7 +26,7 @@ run_001_drac:
     ### ADDED
     # local_dir: /home/ubuntu/experiments/procgen_012
     ### END ADDED
-    checkpoint_freq: 50
+    checkpoint_freq: 1
     checkpoint_at_end: True
     keep_checkpoints_num: 5
 
@@ -285,7 +285,7 @@ run_001_drac:
                   "phasic": {
                     "use_data_aug": True,
                     "policy_loss_mode": "simple",
-                    "detach_value_head": True,
+                    "detach_value_head": False,
                   },
                 },
                 "transforms": ["random_translate"],
