@@ -1,11 +1,14 @@
 import kornia
 import numpy as np
-from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
 from ray.rllib.models import ModelCatalog
+from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
+from ray.rllib.policy.sample_batch import SampleBatch
 from ray.rllib.utils.annotations import override
 from ray.rllib.utils import try_import_torch
 
 torch, nn = try_import_torch()
+
+from models.noisy_nets_util import sample_factored_noise
 
 
 class ResidualBlock(nn.Module):
@@ -97,7 +100,9 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
                  fc_activation="relu",
                  fc_size=256,
                  weight_init="default",
-                 intrinsic_reward_options={}):
+                 intrinsic_reward_options={},
+                 use_noisy_net=False,
+                 noisy_rollout_length=16):
         TorchModelV2.__init__(self, obs_space, action_space, num_outputs, model_config, name)
         nn.Module.__init__(self)
 
@@ -110,6 +115,8 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
         # These are actual model options.
         self.dropout_prob = dropout_prob
         self.prev_action_mode = prev_action_mode
+        self.use_noisy_net = use_noisy_net
+        self.noisy_rollout_length = noisy_rollout_length
 
         h, w, c = obs_space.shape
         shape = (c, h, w)
@@ -128,6 +135,10 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
             hidden_fc_shape_in = shape[0] * shape[1] * shape[2] + self.action_space.n
             logits_fc_shape_in = logits_fc_shape_in + self.action_space.n
             value_fc_shape_in = value_fc_shape_in + self.action_space.n
+
+        # Store these for noisy nets usage later.
+        self.logits_fc_shape_in = logits_fc_shape_in
+        self.num_outputs = num_outputs
 
         self.hidden_fc = nn.Linear(in_features=hidden_fc_shape_in, out_features=fc_size)
         self.logits_fc = nn.Linear(in_features=logits_fc_shape_in, out_features=num_outputs)
@@ -153,6 +164,9 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
     def forward(self, input_dict, state, seq_lens):
         x = input_dict["obs"].float()
         is_training = input_dict["is_training"]
+
+        if not is_training and self.use_noisy_net:
+            state = self._update_state(state)
 
         if is_training and self.norm_layers_active:
             self.set_norm_layer_mode("train")
@@ -192,6 +206,27 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
         self._value = value.squeeze(1)
         return logits, state
 
+    @override(TorchModelV2)
+    def from_batch(self, train_batch, is_training=True):
+        input_dict = {
+            "obs": train_batch[SampleBatch.CUR_OBS],
+            "is_training": is_training,
+        }
+        for key, value in train_batch.items():
+            if "noise" in key:
+                input_dict[key] = train_batch
+
+        if SampleBatch.PREV_ACTIONS in train_batch:
+            input_dict["prev_actions"] = train_batch[SampleBatch.PREV_ACTIONS]
+        if SampleBatch.PREV_REWARDS in train_batch:
+            input_dict["prev_rewards"] = train_batch[SampleBatch.PREV_REWARDS]
+        states = []
+        i = 0
+        while "state_in_{}".format(i) in train_batch:
+            states.append(train_batch["state_in_{}".format(i)])
+            i += 1
+        return self.__call__(input_dict, states, train_batch.get("seq_lens"))
+
     def set_norm_layer_mode(self, mode):
         if mode == "train":
             self.dropout_fc.train()
@@ -199,6 +234,31 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
             self.dropout_fc.eval()
         for conv_seq in self.conv_seqs:
             conv_seq.set_norm_layer_mode(mode)
+
+    def _sample_noise(self, batch_size=1):
+        device = self.logits_fc.weight.device
+        in_size = self.logits_fc_shape_in
+        out_size = self.num_outputs
+        return sample_factored_noise(batch_size, in_size, out_size, device)
+
+    def _update_state(self, prev_state):
+        timesteps, noises = prev_state[0], prev_state[1:]
+        timesteps += 1
+
+        new_noise_indices = torch.where(timesteps % self.noisy_rollout_length == 0)[0]
+        if len(new_noise_indices) > 0:
+            new_noises = self._sample_noise(len(new_noise_indices))
+            for i in range(len(noises)):
+                noises[i][new_noise_indices] = new_noises[i]
+
+        return [timesteps] + noises
+
+    @override(TorchModelV2)
+    def get_initial_state(self):
+        # This should actually return a noise vector for each fully connected layer.
+        # But let's just start with one I guess.
+        noises = [noise.squeeze(0) for noise in self._sample_noise()]
+        return [torch.tensor(0)] + noises
 
     @override(TorchModelV2)
     def value_function(self):

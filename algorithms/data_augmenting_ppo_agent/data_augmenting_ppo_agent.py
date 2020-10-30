@@ -727,11 +727,20 @@ DEFAULT_CONFIG["adapt_policy_parameters_options"] = {
     "alternate_entropy_coeff": 0.025
 }
 
+
+def my_extra_action_out_fn(policy, input_dict, state_batches, model, action_dist):
+    extra = vf_preds_fetches(policy, input_dict, state_batches, model, action_dist)
+    if policy.config["model"]["custom_options"]["use_noisy_net"]:
+        for i, noise in enumerate(state_batches[1:]):
+            extra[f"noise_{i}"] = noise
+    return extra
+
+
 DataAugmentingTorchPolicy = build_torch_policy(name="DataAugmentingTorchPolicy",
                                                get_default_config=lambda: DEFAULT_CONFIG,
                                                loss_fn=data_augmenting_loss,
                                                stats_fn=data_augmenting_stats,
-                                               extra_action_out_fn=vf_preds_fetches,
+                                               extra_action_out_fn=my_extra_action_out_fn,
                                                postprocess_fn=postprocess_sample_batch,
                                                extra_grad_process_fn=my_apply_grad_clipping,
                                                before_init=setup_config,
@@ -800,8 +809,7 @@ def phasic_choose_policy_optimizer(workers, config):
             standardize_fields=["advantages"],
             aux_loss_every_k=config["aux_loss_every_k"],
             aux_loss_num_sgd_iter=config["aux_loss_num_sgd_iter"],
-            aux_loss_start_after_num_steps=config["aux_loss_start_after_num_steps"],
-        )
+            aux_loss_start_after_num_steps=config["aux_loss_start_after_num_steps"])
     else:
         return choose_policy_optimizer(workers, config)
 

@@ -18,6 +18,21 @@ logger = logging.getLogger(__name__)
 torch, _ = try_import_torch()
 
 
+def delete_recurrent_keys(samples):
+    """This is pretty hacky.
+
+    Remove all the recurrent keys so we can shuffle the batch
+    without breaking the downstream batch formatting.
+    This works because in the extra_action_out_fn the required states info
+    was already transferred to a different variable.
+    """
+    keys = list(samples.keys())
+    for key in keys:
+        for key_substring_to_delete in ["state_in", "state_out"]:
+            if key_substring_to_delete in key:
+                del samples.data[key]
+
+
 class SyncPhasicOptimizer(PolicyOptimizer):
     def __init__(self,
                  workers,
@@ -46,6 +61,7 @@ class SyncPhasicOptimizer(PolicyOptimizer):
         self.aux_loss_every_k = aux_loss_every_k
         self.aux_loss_num_sgd_iter = aux_loss_num_sgd_iter
         self.aux_loss_start_after_num_steps = aux_loss_start_after_num_steps
+
         self.memory = []
         # Assert that train batch size is divisible by sgd minibatch size to make populating
         # policy logits simpler.
@@ -77,6 +93,9 @@ class SyncPhasicOptimizer(PolicyOptimizer):
         # Setting the phase to zeros results in policy optimization, and to ones results in aux optimization.
         # These have to be added prior to the policy sgd.
         samples["phase"] = np.zeros(samples.count)
+
+        # This class wants nothing to do with recurrent policies.
+        delete_recurrent_keys(samples)
 
         with self.grad_timer:
             fetches = do_minibatch_sgd(samples, self.policies, self.workers.local_worker(),
