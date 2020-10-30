@@ -44,20 +44,25 @@ class PPOSamplingParams:
                  num_envs_per_worker,
                  rollout_fragment_length,
                  sgd_minibatch_size,
-                 num_sgd_iter=2):
+                 num_sgd_iter=2,
+                 aux_loss_sgd_minibatch_size=None):
         self.num_workers = num_workers
         self.num_envs_per_worker = num_envs_per_worker
         self.rollout_fragment_length = rollout_fragment_length
         self.sgd_minibatch_size = sgd_minibatch_size
         self.num_sgd_iter = num_sgd_iter
+        self.aux_loss_sgd_minibatch_size = aux_loss_sgd_minibatch_size
 
     def __repr__(self):
-        return "_".join([
+        rep = "_".join([
             f"num_work_{self.num_workers}",
             f"num_envs_per_{self.num_envs_per_worker}",
             f"rollout_len_{self.rollout_fragment_length}",
-            f"minibatch_{self.sgd_minibatch_size}",
+            f"mb_{self.sgd_minibatch_size}",
         ])
+        if self.aux_loss_sgd_minibatch_size is not None:
+            rep += f"_aux_mb_{self.aux_loss_sgd_minibatch_size}"
+        return rep
 
     @property
     def num_gpus_per_worker(self):
@@ -211,7 +216,7 @@ class PhasicParams:
     def __init__(self,
                  active=True,
                  aux_loss_every_k=32,
-                 aux_loss_num_sgd_iter=4,
+                 aux_loss_num_sgd_iter=3,
                  use_data_aug=True,
                  policy_loss_mode="simple",
                  aux_loss_start_after_num_steps=0,
@@ -266,6 +271,17 @@ class AdaptiveEntropyParams:
             return f"adapt_ent_{self.unique_fraction_threshold}_{self.alternate_entropy_coeff}"
 
 
+class NoisyNetParams:
+    def __init__(self, active=False):
+        self.active = active
+
+    def __repr__(self):
+        if self.active:
+            return "noisy"
+        else:
+            return ""
+
+
 def get_is_recurrent(config):
     if "rnn" in config["config"]["model"]["custom_model"]:
         return True
@@ -318,16 +334,22 @@ def set_ppo_algorithm_params(config, params):
     config["config"]["vf_loss_coeff"] = params.vf_loss_coeff
     config["config"]["entropy_coeff_schedule"] = params.entropy_coeff_schedule
     config["config"]["reward_normalization_options"] = params.reward_normalization_params
+
     config["config"]["grad_clip"] = params.grad_clip_params.grad_clip
     config["config"]["grad_clip_elementwise"] = params.grad_clip_params.grad_clip_elementwise
     config["config"]["grad_clip_options"] = params.grad_clip_params.options()
+
     config["config"]["auto_drac_options"] = params.auto_drac_params.options(
         params.sampling_params.total_minibatches_per_train_iteration)
+
     config["config"]["use_phasic_optimizer"] = params.phasic_params.active
     config["config"]["aux_loss_every_k"] = params.phasic_params.aux_loss_every_k
     config["config"]["aux_loss_num_sgd_iter"] = params.phasic_params.aux_loss_num_sgd_iter
     config["config"][
         "aux_loss_start_after_num_steps"] = params.phasic_params.aux_loss_start_after_num_steps
+    config["config"][
+        "aux_loss_sgd_minibatch_size"] = params.sampling_params.aux_loss_sgd_minibatch_size
+
     config["config"]["adapt_policy_parameters"] = params.adaptive_entropy_params.active
     config["config"]["adapt_policy_parameters_options"] = params.adaptive_entropy_params.options()
 
@@ -378,6 +400,8 @@ def set_ppo_model_params(config, params, is_recurrent):
         },
         "fc_activation": params.fc_activation,
         "fc_size": params.fc_size,
+        "use_noisy_net": params.noisy_net_params.active,
+        "noisy_rollout_length": params.sampling_params.rollout_fragment_length,
     }
     custom_model_options["intrinsic_reward_options"] = params.intrinsic_reward_params.options()
     config["config"]["model"]["custom_options"] = custom_model_options
@@ -424,7 +448,8 @@ def get_ppo_exp_name(params, is_recurrent):
         f"{params.intrinsic_reward_params}",
         # f"auto_drac_{params.auto_drac_params}",
         f"{params.phasic_params}",
-        f"{params.adaptive_entropy_params}"
+        f"{params.adaptive_entropy_params}",
+        f"{params.noisy_net_params}",
     ])
 
     # Add the params that only apply in the recurrent or non-recurrent cases.
@@ -464,7 +489,8 @@ def sample_configs(base_config,
                    auto_drac_params_options=[AutoDracParams()],
                    phasic_params_options=[PhasicParams()],
                    vf_loss_coeff_options=[0.25],
-                   adaptive_entropy_params_options=[AdaptiveEntropyParams()]):
+                   adaptive_entropy_params_options=[AdaptiveEntropyParams()],
+                   noisy_net_params_options=[NoisyNetParams()]):
     is_recurrent = get_is_recurrent(base_config)
     parameter_settings = named_product(
         learning_rate=learning_rate_options,
@@ -489,6 +515,7 @@ def sample_configs(base_config,
         phasic_params=phasic_params_options,
         vf_loss_coeff=vf_loss_coeff_options,
         adaptive_entropy_params=adaptive_entropy_params_options,
+        noisy_net_params=noisy_net_params_options,
     )
     configs = dict()
     for params in parameter_settings:
@@ -518,7 +545,23 @@ def write_experiments(base, num_iterations, env_names):
             adaptive_entropy_params_options=[AdaptiveEntropyParams(active=True)],
             intrinsic_reward_params_options=[IntrinsicRewardParams(use_noop_penalty=True)],
         ))
-
+    configs.update(
+        sample_configs(
+            copy.deepcopy(base),
+            phasic_params_options=[
+                PhasicParams(active=True,
+                             aux_loss_every_k=32,
+                             aux_loss_num_sgd_iter=3,
+                             use_data_aug=True,
+                             policy_loss_mode="simple",
+                             aux_loss_start_after_num_steps=0,
+                             detach_value_head=False),
+            ],
+            adaptive_entropy_params_options=[AdaptiveEntropyParams(active=True)],
+            intrinsic_reward_params_options=[IntrinsicRewardParams(use_noop_penalty=True)],
+            noisy_net_params_options=[NoisyNetParams(active=True)],
+            entropy_coeff_schedule_options=[[[0, 0.0]]],
+        ))
     exps = dict()
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)
