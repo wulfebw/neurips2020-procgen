@@ -720,6 +720,7 @@ DEFAULT_CONFIG["use_phasic_optimizer"] = True
 DEFAULT_CONFIG["aux_loss_every_k"] = 32
 DEFAULT_CONFIG["aux_loss_num_sgd_iter"] = 4
 DEFAULT_CONFIG["aux_loss_start_after_num_steps"] = 0
+DEFAULT_CONFIG["aux_loss_sgd_minibatch_size"] = None
 
 DEFAULT_CONFIG["adapt_policy_parameters"] = False
 DEFAULT_CONFIG["adapt_policy_parameters_options"] = {
@@ -809,7 +810,8 @@ def phasic_choose_policy_optimizer(workers, config):
             standardize_fields=["advantages"],
             aux_loss_every_k=config["aux_loss_every_k"],
             aux_loss_num_sgd_iter=config["aux_loss_num_sgd_iter"],
-            aux_loss_start_after_num_steps=config["aux_loss_start_after_num_steps"])
+            aux_loss_start_after_num_steps=config["aux_loss_start_after_num_steps"],
+            aux_loss_sgd_minibatch_size=config["aux_loss_sgd_minibatch_size"])
     else:
         return choose_policy_optimizer(workers, config)
 

@@ -42,7 +42,8 @@ class SyncPhasicOptimizer(PolicyOptimizer):
                  standardize_fields=frozenset([]),
                  aux_loss_every_k=16,
                  aux_loss_num_sgd_iter=9,
-                 aux_loss_start_after_num_steps=0):
+                 aux_loss_start_after_num_steps=0,
+                 aux_loss_sgd_minibatch_size=None):
         PolicyOptimizer.__init__(self, workers)
 
         self.update_weights_timer = TimerStat()
@@ -61,6 +62,9 @@ class SyncPhasicOptimizer(PolicyOptimizer):
         self.aux_loss_every_k = aux_loss_every_k
         self.aux_loss_num_sgd_iter = aux_loss_num_sgd_iter
         self.aux_loss_start_after_num_steps = aux_loss_start_after_num_steps
+        self.aux_loss_sgd_minibatch_size = (aux_loss_sgd_minibatch_size
+                                            if aux_loss_sgd_minibatch_size is not None else
+                                            sgd_minibatch_size)
 
         self.memory = []
         # Assert that train batch size is divisible by sgd minibatch size to make populating
@@ -123,7 +127,7 @@ class SyncPhasicOptimizer(PolicyOptimizer):
                 # Ones indicate aux phase.
                 samples["phase"] = np.ones_like(samples["phase"])
                 do_minibatch_sgd(samples, self.policies, self.workers.local_worker(),
-                                 self.aux_loss_num_sgd_iter, self.sgd_minibatch_size, [])
+                                 self.aux_loss_num_sgd_iter, self.aux_loss_sgd_minibatch_size, [])
                 self.memory = []
 
         return self.learner_stats

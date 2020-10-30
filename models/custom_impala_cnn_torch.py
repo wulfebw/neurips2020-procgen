@@ -275,10 +275,13 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
 
     @override(TorchModelV2)
     def get_initial_state(self):
-        # This should actually return a noise vector for each fully connected layer.
-        # But let's just start with one I guess.
-        noises = [noise.squeeze(0) for noise in self.logits_fc.sample_noise()]
-        return [torch.tensor(0)] + noises
+        if self.use_noisy_net:
+            # This should actually return a noise vector for each fully connected layer.
+            # But let's just start with one I guess.
+            noises = [noise.squeeze(0) for noise in self.logits_fc.sample_noise()]
+            return [torch.tensor(0)] + noises
+        else:
+            return []
 
     @override(TorchModelV2)
     def value_function(self):
