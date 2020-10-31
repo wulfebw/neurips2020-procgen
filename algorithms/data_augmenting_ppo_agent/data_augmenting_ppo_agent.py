@@ -62,6 +62,10 @@ def compute_ppo_loss(policy, dist_class, model, train_batch, action_dist, state)
     return policy.loss_obj.loss
 
 
+def compute_variational_options_classifier_loss(logits, targets):
+    return nn.functional.cross_entropy(logits, targets.squeeze()).mean()
+
+
 def update_transforms(policy, model, train_batch):
     auto_drac_opt = policy.config["auto_drac_options"]
     if not auto_drac_opt["active"]:
@@ -175,7 +179,13 @@ def simple_data_augmenting_loss(policy, model, dist_class, train_batch):
 def no_data_augmenting_loss(policy, model, dist_class, train_batch):
     logits, state = model.from_batch(train_batch)
     action_dist = dist_class(logits, model)
-    return compute_ppo_loss(policy, dist_class, model, train_batch, action_dist, state)
+    loss = compute_ppo_loss(policy, dist_class, model, train_batch, action_dist, state)
+    if policy.config["model"]["custom_options"]["intrinsic_reward_options"][
+            "use_variational_options"]:
+        policy.variational_options_loss = compute_variational_options_classifier_loss(
+            logits=model.options_logits(), targets=train_batch["options"])
+        loss += policy.variational_options_loss
+    return loss
 
 
 def phasic_aux_loss(policy, model, dist_class, train_batch, use_data_aug):
@@ -203,6 +213,12 @@ def phasic_aux_loss(policy, model, dist_class, train_batch, use_data_aug):
 
     # Overall.
     aux_loss = bc_loss + value_loss
+
+    if policy.config["model"]["custom_options"]["intrinsic_reward_options"][
+            "use_variational_options"]:
+        policy.variational_options_loss = compute_variational_options_classifier_loss(
+            logits=model.options_logits(), targets=train_batch["options"])
+        aux_loss += policy.variational_options_loss
 
     # Set these to report later in metrics.
     policy.aux_bc_loss = bc_loss
@@ -377,7 +393,8 @@ def data_augmenting_stats(policy, train_batch):
     stats = kl_and_loss_stats(policy, train_batch)
     if hasattr(policy.loss_obj, "data_aug_loss"):
         stats["drac_loss_unweighted"] = policy.loss_obj.data_aug_loss
-
+    if hasattr(policy, "variational_options_loss"):
+        stats["variational_options_loss"] = policy.variational_options_loss
     stats = add_reward_normalization_stats(policy, train_batch, stats)
     stats = add_auto_drac_stats(policy, stats)
     stats = add_phasic_stats(policy, stats)
@@ -485,6 +502,21 @@ def apply_state_revisitation_penalty(sample_batch, options):
     return sample_batch
 
 
+def apply_variational_options_intrinsic_reward(sample_batch, params):
+    # The option values at timestep t-1 are associated with the logits at timestep t.
+    # This is accounted for by storing the prev options each timestep as `options`.
+    options = sample_batch["options"]
+    options_logits = sample_batch["options_logits"]
+    options_probs = torch.nn.functional.softmax(torch.tensor(options_logits), dim=1).numpy()
+    option_probs = options_probs[np.arange(len(options_probs)), options.reshape(-1)]
+
+    # The reward for an option at time t occurs as the same timestep.
+    # So basically the rewards are applied to each timestep except the last in the rollout.
+    rewards = np.log(option_probs) * params["reward_coeff"]
+    sample_batch[SampleBatch.REWARDS] += rewards
+    return sample_batch
+
+
 def intrinsic_reward_postprocess_sample_batch(policy,
                                               sample_batch,
                                               other_agent_batches=None,
@@ -497,6 +529,10 @@ def intrinsic_reward_postprocess_sample_batch(policy,
         assert "state_revisitation_penalty_options" in opt
         sample_batch = apply_state_revisitation_penalty(sample_batch,
                                                         opt["state_revisitation_penalty_options"])
+    if opt.get("use_variational_options", False):
+        assert "variational_options_options" in opt
+        sample_batch = apply_variational_options_intrinsic_reward(
+            sample_batch, opt["variational_options_options"])
     return sample_batch
 
 
@@ -731,9 +767,10 @@ DEFAULT_CONFIG["adapt_policy_parameters_options"] = {
 
 def my_extra_action_out_fn(policy, input_dict, state_batches, model, action_dist):
     extra = vf_preds_fetches(policy, input_dict, state_batches, model, action_dist)
-    if policy.config["model"]["custom_options"]["use_noisy_net"]:
-        for i, noise in enumerate(state_batches[1:]):
-            extra[f"noise_{i}"] = noise
+    if policy.config["model"]["custom_options"]["intrinsic_reward_options"][
+            "use_variational_options"]:
+        extra["options"] = model.prev_logits()
+        extra["options_logits"] = model.options_logits()
     return extra
 
 

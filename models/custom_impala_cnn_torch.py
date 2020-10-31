@@ -8,8 +8,6 @@ from ray.rllib.utils import try_import_torch
 
 torch, nn = try_import_torch()
 
-from models.noisy_nets_util import NoisyLinear
-
 
 class ResidualBlock(nn.Module):
     def __init__(self, channels):
@@ -85,6 +83,27 @@ def initialize_parameters(params, mode):
         raise ValueError(f"Unsupported initialization: {weight_init}")
 
 
+class ObsActCondClassifier(nn.Module):
+    def __init__(self, obs_feature_size, act_size, out_size, fc_sizes):
+        super(ObsActCondClassifier, self).__init__()
+
+        layers = []
+        in_size = obs_feature_size + act_size
+        for fc_size in fc_sizes:
+            layers.append(nn.Linear(in_size, fc_size))
+            in_size = fc_size + act_size
+        layers.append(nn.Linear(in_size, out_size))
+        self.layers = nn.Sequential(*layers)
+
+    def forward(self, x, a):
+        for i, layer in enumerate(self.layers):
+            x = torch.cat((x, a), axis=-1)
+            x = layer(x)
+            if i < len(self.layers) - 1:
+                x = nn.functional.relu(x)
+        return x
+
+
 class CustomImpalaCNN(TorchModelV2, nn.Module):
     def __init__(self,
                  obs_space,
@@ -100,9 +119,7 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
                  fc_activation="relu",
                  fc_size=256,
                  weight_init="default",
-                 intrinsic_reward_options={},
-                 use_noisy_net=False,
-                 noisy_rollout_length=16):
+                 intrinsic_reward_options={}):
         TorchModelV2.__init__(self, obs_space, action_space, num_outputs, model_config, name)
         nn.Module.__init__(self)
 
@@ -110,13 +127,17 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
         # It must be stored on this class.
         self.data_augmentation_options = data_augmentation_options
         self.optimizer_options = optimizer_options
+        # This ones actually more complicated due to variational options.
         self.intrinsic_reward_options = intrinsic_reward_options
+        self.use_variational_options = self.intrinsic_reward_options.get(
+            "use_variational_options", False)
+        var_opt_opt = self.intrinsic_reward_options["variational_options_options"]
+        self.variational_options_rollout_length = var_opt_opt["rollout_length"]
+        self.variational_options_size = var_opt_opt["options_size"]
 
         # These are actual model options.
         self.dropout_prob = dropout_prob
         self.prev_action_mode = prev_action_mode
-        self.use_noisy_net = use_noisy_net
-        self.noisy_rollout_length = noisy_rollout_length
 
         h, w, c = obs_space.shape
         shape = (c, h, w)
@@ -128,23 +149,28 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
             conv_seqs.append(conv_seq)
         self.conv_seqs = nn.ModuleList(conv_seqs)
 
-        hidden_fc_shape_in = shape[0] * shape[1] * shape[2]
+        conv_output_size = shape[0] * shape[1] * shape[2]
+        hidden_fc1_shape_in = conv_output_size
+        hidden_fc2_shape_in = fc_size
         logits_fc_shape_in = fc_size
         value_fc_shape_in = fc_size
         if prev_action_mode == "concat":
-            hidden_fc_shape_in = shape[0] * shape[1] * shape[2] + self.action_space.n
+            hidden_fc1_shape_in = hidden_fc1_shape_in + self.action_space.n
+            hidden_fc2_shape_in = hidden_fc2_shape_in + self.action_space.n
             logits_fc_shape_in = logits_fc_shape_in + self.action_space.n
             value_fc_shape_in = value_fc_shape_in + self.action_space.n
+        if self.use_variational_options:
+            hidden_fc2_shape_in = hidden_fc2_shape_in + self.variational_options_size
+            logits_fc_shape_in = logits_fc_shape_in + self.variational_options_size
+            value_fc_shape_in = value_fc_shape_in + self.variational_options_size
 
         # Store these for noisy nets usage later.
         self.logits_fc_shape_in = logits_fc_shape_in
         self.num_outputs = num_outputs
 
-        self.hidden_fc = nn.Linear(in_features=hidden_fc_shape_in, out_features=fc_size)
-        if self.use_noisy_net:
-            self.logits_fc = NoisyLinear(in_size=logits_fc_shape_in, out_size=num_outputs)
-        else:
-            self.logits_fc = nn.Linear(in_features=logits_fc_shape_in, out_features=num_outputs)
+        self.hidden_fc1 = nn.Linear(in_features=hidden_fc1_shape_in, out_features=fc_size)
+        self.hidden_fc2 = nn.Linear(in_features=hidden_fc2_shape_in, out_features=fc_size)
+        self.logits_fc = nn.Linear(in_features=logits_fc_shape_in, out_features=num_outputs)
         self.value_fc = nn.Linear(in_features=value_fc_shape_in, out_features=1)
 
         self.dropout_fc = nn.Dropout(self.dropout_prob)
@@ -155,6 +181,14 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
             self.fc_activation = nn.functional.tanh
         else:
             raise ValueError(f"Unsupported fc activation: {fc_activation}")
+
+        if self.use_variational_options:
+            self.options_classifier = ObsActCondClassifier(obs_feature_size=fc_size,
+                                                           act_size=self.action_space.n,
+                                                           out_size=self.variational_options_size,
+                                                           fc_sizes=[256])
+            self._options_logits = None
+            self._prev_options = None
 
         initialize_parameters(self.named_parameters(), weight_init)
 
@@ -167,9 +201,6 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
     def forward(self, input_dict, state, seq_lens):
         x = input_dict["obs"].float()
         is_training = input_dict["is_training"]
-
-        if not is_training and self.use_noisy_net:
-            state = self._update_state(state)
 
         if is_training and self.norm_layers_active:
             self.set_norm_layer_mode("train")
@@ -193,33 +224,55 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
             assert len(a.shape) == len(x.shape), f"a.shape: {a.shape}, x.shape: {x.shape}"
             x = torch.cat((x, a), axis=-1)
 
-        x = self.hidden_fc(x)
+        x = self.hidden_fc1(x)
         x = self.fc_activation(x)
         x = self.dropout_fc(x)
+
+        # Latents classifier.
+        if self.use_variational_options:
+            # Detach the previous features to avoid gradient interference with policy
+            # and value objectives.
+            self._options_logits = self.options_classifier(x.detach(), a)
+
+        if self.use_variational_options:
+            if len(state) > 0:
+                # Rollout case.
+                options = state[1]
+            else:
+                # Train case.
+                assert "options" in input_dict
+                options = input_dict["options"]
+            # Concat options to features as one-hot.
+            options = torch.nn.functional.one_hot(options, self.variational_options_size).to(
+                x.device).to(torch.float32)
+            if len(options.shape) == 3:
+                options = options.squeeze(1)
+            assert len(options.shape) == len(
+                x.shape), f"options.shape: {options.shape}, x.shape: {x.shape}"
+            x = torch.cat((x, options), axis=-1)
 
         if self.prev_action_mode == "concat":
             x = torch.cat((x, a), axis=-1)
 
-        if self.use_noisy_net:
-            if len(state) > 0:
-                # Rollout case.
-                noise = state[1:]
-            else:
-                noise_keys = list(sorted(k for k in input_dict.keys() if "noise" in k))
-                if len(noise_keys) > 0:
-                    # Policy update.
-                    noise = [input_dict[key] for key in noise_keys]
-                else:
-                    # Aux update.
-                    noise = [None, None]
-            logits = self.logits_fc(x, *noise)
-        else:
-            logits = self.logits_fc(x)
+        x = self.hidden_fc2(x)
+        x = self.fc_activation(x)
+        x = self.dropout_fc(x)
+
+        if self.use_variational_options:
+            x = torch.cat((x, options), axis=-1)
+        if self.prev_action_mode == "concat":
+            x = torch.cat((x, a), axis=-1)
+
+        logits = self.logits_fc(x)
 
         if self._detach_value_head:
             value = self.value_fc(x.detach())
         else:
             value = self.value_fc(x)
+
+        if not is_training and self.use_variational_options:
+            self._prev_logits = state[1].clone()
+            state = self._update_state(state)
 
         self._value = value.squeeze(1)
         return logits, state
@@ -230,10 +283,12 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
             "obs": train_batch[SampleBatch.CUR_OBS],
             "is_training": is_training,
         }
-        for key, value in train_batch.items():
-            if "noise" in key:
-                input_dict[key] = torch.tensor(value,
-                                               dtype=self.logits_fc.dtype).to(self.logits_fc.device)
+
+        if "options" in train_batch:
+            device = train_batch[SampleBatch.CUR_OBS].device
+            input_dict["options"] = torch.tensor(train_batch["options"],
+                                                 dtype=torch.long,
+                                                 device=device)
 
         if SampleBatch.PREV_ACTIONS in train_batch:
             input_dict["prev_actions"] = train_batch[SampleBatch.PREV_ACTIONS]
@@ -255,31 +310,27 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
         for conv_seq in self.conv_seqs:
             conv_seq.set_norm_layer_mode(mode)
 
-    def _sample_noise(self, batch_size=1):
+    def _sample_options(self, size):
         device = self.logits_fc.weight.device
-        in_size = self.logits_fc_shape_in
-        out_size = self.num_outputs
-        return sample_factored_noise(batch_size, in_size, out_size, device)
+        return torch.randint(size=(size, ),
+                             high=self.variational_options_size).to(torch.long).to(device)
 
     def _update_state(self, prev_state):
-        timesteps, noises = prev_state[0], prev_state[1:]
+        timesteps, options = prev_state
         timesteps += 1
 
-        new_noise_indices = torch.where(timesteps % self.noisy_rollout_length == 0)[0]
-        if len(new_noise_indices) > 0:
-            new_noises = self.logits_fc.sample_noise(len(new_noise_indices))
-            for i in range(len(noises)):
-                noises[i][new_noise_indices] = new_noises[i]
-
-        return [timesteps] + noises
+        update_indices = torch.where(timesteps % self.variational_options_rollout_length == 0)[0]
+        if len(update_indices) > 0:
+            # new_options = self._sample_options(len(update_indices)).reshape(-1, 1)
+            new_options = (options[update_indices] + 1) % self.variational_options_size
+            options[update_indices] = new_options
+        return [timesteps, options]
 
     @override(TorchModelV2)
     def get_initial_state(self):
-        if self.use_noisy_net:
-            # This should actually return a noise vector for each fully connected layer.
-            # But let's just start with one I guess.
-            noises = [noise.squeeze(0) for noise in self.logits_fc.sample_noise()]
-            return [torch.tensor(0)] + noises
+        if self.use_variational_options:
+            return [torch.tensor(0), torch.zeros_like(self._sample_options(1))]
+            # return [torch.tensor(0), self._sample_options(1)]
         else:
             return []
 
@@ -287,6 +338,14 @@ class CustomImpalaCNN(TorchModelV2, nn.Module):
     def value_function(self):
         assert self._value is not None, "must call forward() first"
         return self._value
+
+    def options_logits(self):
+        assert self._options_logits is not None
+        return self._options_logits
+
+    def prev_logits(self):
+        assert self._prev_logits is not None
+        return self._prev_logits
 
     def detach_value_head(self):
         self._detach_value_head = True

@@ -130,20 +130,26 @@ class PPOGradClipParams:
 
 
 class IntrinsicRewardParams:
-    def __init__(
-        self,
-        use_noop_penalty=False,
-        noop_penalty_options={
-            "reward": -0.1,
-            "min_timestep": 10
-        },
-        use_state_revisitation_penalty=False,
-        state_revisitation_penalty_options={"reward": -0.01},
-    ):
+    def __init__(self,
+                 use_noop_penalty=False,
+                 noop_penalty_options={
+                     "reward": -0.1,
+                     "min_timestep": 10
+                 },
+                 use_state_revisitation_penalty=False,
+                 state_revisitation_penalty_options={"reward": -0.01},
+                 use_variational_options=False,
+                 variational_options_options={
+                     "reward_coeff": 0.1,
+                     "options_size": 4,
+                     "rollout_length": 4,
+                 }):
         self.use_noop_penalty = use_noop_penalty
         self.noop_penalty_options = noop_penalty_options
         self.use_state_revisitation_penalty = use_state_revisitation_penalty
         self.state_revisitation_penalty_options = state_revisitation_penalty_options
+        self.use_variational_options = use_variational_options
+        self.variational_options_options = variational_options_options
 
     def options(self):
         return {
@@ -151,6 +157,8 @@ class IntrinsicRewardParams:
             "noop_penalty_options": self.noop_penalty_options,
             "use_state_revisitation_penalty": self.use_state_revisitation_penalty,
             "state_revisitation_penalty_options": self.state_revisitation_penalty_options,
+            "use_variational_options": self.use_variational_options,
+            "variational_options_options": self.variational_options_options,
         }
 
     def __repr__(self):
@@ -160,6 +168,11 @@ class IntrinsicRewardParams:
             rep += f"_{self.noop_penalty_options['min_timestep']}"
         if self.use_state_revisitation_penalty:
             rep += "_revisit"
+        if self.use_variational_options:
+            rep += "_var_opt"
+            rep += f"_{self.variational_options_options['reward_coeff']}"
+            rep += f"_{self.variational_options_options['options_size']}"
+            rep += f"_{self.variational_options_options['rollout_length']}"
         return rep
 
 
@@ -543,7 +556,15 @@ def write_experiments(base, num_iterations, env_names):
                              detach_value_head=False),
             ],
             adaptive_entropy_params_options=[AdaptiveEntropyParams(active=True)],
-            intrinsic_reward_params_options=[IntrinsicRewardParams(use_noop_penalty=True)],
+            intrinsic_reward_params_options=[
+                IntrinsicRewardParams(use_noop_penalty=True,
+                                      use_variational_options=True,
+                                      variational_options_options={
+                                          "reward_coeff": 0.1,
+                                          "options_size": 4,
+                                          "rollout_length": 4,
+                                      }),
+            ],
         ))
     configs.update(
         sample_configs(
@@ -558,10 +579,17 @@ def write_experiments(base, num_iterations, env_names):
                              detach_value_head=False),
             ],
             adaptive_entropy_params_options=[AdaptiveEntropyParams(active=True)],
-            intrinsic_reward_params_options=[IntrinsicRewardParams(use_noop_penalty=True)],
-            noisy_net_params_options=[NoisyNetParams(active=True)],
-            entropy_coeff_schedule_options=[[[0, 0.0]]],
+            intrinsic_reward_params_options=[
+                IntrinsicRewardParams(use_noop_penalty=True,
+                                      use_variational_options=True,
+                                      variational_options_options={
+                                          "reward_coeff": 0.05,
+                                          "options_size": 4,
+                                          "rollout_length": 4,
+                                      }),
+            ],
         ))
+
     exps = dict()
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)

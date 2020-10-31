@@ -36,7 +36,7 @@ run_001_drac:
         ################################################
         env_config:
             # Name of the procgen environment to train on # Note, that this parameter will be overriden during the evaluation by the AIcrowd evaluators.
-            env_name: bigfish # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
+            env_name: coinrun # starpilot # coinrun # bigfish # dodgeball # heist # coinrun
             # The number of unique levels that can be generated. Set to 0 to use unlimited levels
             num_levels: 200
             # The lowest seed that will be used to generated levels. 'start_level' and 'num_levels' fully specify the set of possible levels
@@ -211,7 +211,7 @@ run_001_drac:
         aux_loss_every_k: 32
         aux_loss_num_sgd_iter: 3
         aux_loss_start_after_num_steps: 0
-        aux_loss_sgd_minibatch_size: 1750
+        aux_loss_sgd_minibatch_size: null
 
         adapt_policy_parameters: True
         adapt_policy_parameters_options: {
@@ -312,12 +312,16 @@ run_001_drac:
                 "use_state_revisitation_penalty": False,
                 "state_revisitation_penalty_options": {
                   "reward": -0.01
+                },
+                "use_variational_options": True,
+                "variational_options_options": {
+                  "reward_coeff": 0.1,
+                  "options_size": 4,
+                  "rollout_length": 4,
                 }
               },
               "fc_activation": "relu",
               "fc_size": 256,
-              "use_noisy_net": False,
-              "noisy_rollout_length": 16, # needs to match rollout fragment length
             }
 
         ################################################
@@ -436,5 +440,5 @@ run_001_drac:
               "normalize_reward": False
             }
           },
-          "explore": True
+          "explore": False
         }
