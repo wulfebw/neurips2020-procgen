@@ -248,7 +248,7 @@ class PhasicParams:
 
 
 class AdaptiveEntropyParams:
-    def __init__(self, active=False, unique_fraction_threshold=0.9, alternate_entropy_coeff=0.025):
+    def __init__(self, active=False, unique_fraction_threshold=0.9, alternate_entropy_coeff=0.02):
         self.active = active
         self.unique_fraction_threshold = unique_fraction_threshold
         self.alternate_entropy_coeff = alternate_entropy_coeff
@@ -457,9 +457,9 @@ def sample_configs(base_config,
                        [[0, 0.01]],
                    ],
                    fc_activation_options=["relu"],
-                   grad_clip_params_options=[PPOGradClipParams(1.0, "constant", 1.0, 0.1, 95, 128)],
+                   grad_clip_params_options=[PPOGradClipParams(1.0, "constant", 5.0, 1.0, 97, 128)],
                    dropout_prob_options=[0.1],
-                   drac_weight_options=[0.1],
+                   drac_weight_options=[0.2],
                    intrinsic_reward_params_options=[IntrinsicRewardParams()],
                    auto_drac_params_options=[AutoDracParams()],
                    phasic_params_options=[PhasicParams()],
@@ -514,11 +514,17 @@ def write_experiments(base, num_iterations, env_names):
                              policy_loss_mode="simple",
                              aux_loss_start_after_num_steps=0,
                              detach_value_head=False),
+                PhasicParams(active=True,
+                             aux_loss_every_k=32,
+                             aux_loss_num_sgd_iter=2,
+                             use_data_aug=True,
+                             policy_loss_mode="simple",
+                             aux_loss_start_after_num_steps=0,
+                             detach_value_head=False),
             ],
             adaptive_entropy_params_options=[AdaptiveEntropyParams(active=True)],
             intrinsic_reward_params_options=[IntrinsicRewardParams(use_noop_penalty=True)],
         ))
-
     exps = dict()
     for env_name in env_names:
         env_dir = os.path.join(base["local_dir"], env_name)

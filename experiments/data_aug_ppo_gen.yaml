@@ -17,14 +17,16 @@ run_001_drac:
     ################################################
     stop:
         timesteps_total: 8000000
+        time_total_s: 7200
 
     ################################################
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
-    local_dir: /home/ubuntu/experiments/procgen_012
+    # local_dir: /home/wulfebw/experiments/procgen_000
+    local_dir: /home/ubuntu/experiments/procgen_001
     ### END ADDED
-    checkpoint_freq: 50
+    checkpoint_freq: 1
     checkpoint_at_end: True
     keep_checkpoints_num: 5
 
@@ -100,11 +102,11 @@ run_001_drac:
         num_sgd_iter: 1 # 2
         # Total SGD batch size across all devices for SGD. This defines the
         # minibatch size within each epoch.
-        sgd_minibatch_size: 1792 # 512 # 1760 # 880 # 2048 # 8 minibatches per epoch
+        sgd_minibatch_size: 1750 # 512 # 1760 # 880 # 2048 # 8 minibatches per epoch
         # Training batch size, if applicable. Should be >= rollout_fragment_length.
         # Samples batches will be concatenated together to a batch of this size,
         # which is then passed to SGD.
-        train_batch_size: 14336 # 14080 # 16384 # 256 * 64
+        train_batch_size: 14000 # 14080 # 16384 # 256 * 64
         # Initial coefficient for KL divergence.
         kl_coeff: 0.0
         # Target value for KL divergence.
@@ -128,9 +130,9 @@ run_001_drac:
         grad_clip_elementwise: 1.0
         grad_clip_options: {
           "mode": "constant",
-          "adaptive_max": 1.0,
-          "adaptive_min": 0.1,
-          "adaptive_percentile": 95,
+          "adaptive_max": 5.0,
+          "adaptive_min": 1.0,
+          "adaptive_percentile": 97,
           "adaptive_buffer_size": 128,
         }
         # Which observation filter to apply to the observation.
@@ -208,7 +210,7 @@ run_001_drac:
 
         use_phasic_optimizer: True
         aux_loss_every_k: 32
-        aux_loss_num_sgd_iter: 3
+        aux_loss_num_sgd_iter: 2
         aux_loss_start_after_num_steps: 0
 
         adapt_policy_parameters: True
@@ -328,7 +330,7 @@ run_001_drac:
         # Number of environments to evaluate vectorwise per worker. This enables
         # model inference batching, which can improve performance for inference
         # bottlenecked workloads.
-        num_envs_per_worker: 128 # 64 # 16 # 12
+        num_envs_per_worker: 125 # 64 # 16 # 12
 
         # Divide episodes into fragments of this many steps each during rollouts.
         # Sample batches of this size are collected from rollout workers and
@@ -422,7 +424,7 @@ run_001_drac:
         # === Evaluation Settings ===
         ################################################
         ################################################
-        evaluation_interval: 480 # 568 # unfortunate to have to hardcode this, but not sure how better to do it.
-        evaluation_num_episodes: 2000
+        evaluation_interval: 40 # 568 # unfortunate to have to hardcode this, but not sure how better to do it.
+        evaluation_num_episodes: 300
         evaluation_num_workers: 0
         evaluation_config: {"env_config": {"num_levels": 0, "env_wrapper_options": {"normalize_reward": False}}}
