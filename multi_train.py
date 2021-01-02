@@ -509,13 +509,6 @@ def write_experiments(base, num_iterations, env_names):
             phasic_params_options=[
                 PhasicParams(active=True,
                              aux_loss_every_k=32,
-                             aux_loss_num_sgd_iter=3,
-                             use_data_aug=True,
-                             policy_loss_mode="simple",
-                             aux_loss_start_after_num_steps=0,
-                             detach_value_head=False),
-                PhasicParams(active=True,
-                             aux_loss_every_k=32,
                              aux_loss_num_sgd_iter=2,
                              use_data_aug=True,
                              policy_loss_mode="simple",
