@@ -445,7 +445,7 @@ def sample_configs(base_config,
                    fc_size_options=[256],
                    lstm_cell_size_options=[256],
                    weight_init_options=["default"],
-                   sampling_params_options=[PPOSamplingParams(7, 125, 16, 1750)],
+                   sampling_params_options=[PPOSamplingParams(7, 120, 16, 1680)],
                    max_seq_len_options=[16],
                    reward_normalization_params_options=[{
                        "mode": "running_return",
@@ -503,6 +503,21 @@ def sample_configs(base_config,
 
 def write_experiments(base, num_iterations, env_names):
     configs = dict()
+    configs.update(
+        sample_configs(
+            copy.deepcopy(base),
+            phasic_params_options=[
+                PhasicParams(active=True,
+                             aux_loss_every_k=32,
+                             aux_loss_num_sgd_iter=2,
+                             use_data_aug=False,
+                             policy_loss_mode="simple",
+                             aux_loss_start_after_num_steps=0,
+                             detach_value_head=False),
+            ],
+            adaptive_entropy_params_options=[AdaptiveEntropyParams(active=True)],
+            intrinsic_reward_params_options=[IntrinsicRewardParams(use_noop_penalty=True)],
+        ))
     configs.update(
         sample_configs(
             copy.deepcopy(base),

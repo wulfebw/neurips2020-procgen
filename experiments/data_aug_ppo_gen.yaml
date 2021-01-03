@@ -17,16 +17,16 @@ run_001_drac:
     ################################################
     stop:
         timesteps_total: 8000000
-        time_total_s: 7200
+        # time_total_s: 7200
 
     ################################################
     # === Settings for Checkpoints ===
     ################################################
     ### ADDED
     # local_dir: /home/wulfebw/experiments/procgen_000
-    local_dir: /home/ubuntu/experiments/procgen_001
+    local_dir: /home/ubuntu/experiments/procgen_gen
     ### END ADDED
-    checkpoint_freq: 1
+    checkpoint_freq: 5
     checkpoint_at_end: True
     keep_checkpoints_num: 5
 
